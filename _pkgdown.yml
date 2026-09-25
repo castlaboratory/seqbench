@@ -1,0 +1,15 @@
+url: https://castlaboratory.github.io/seqbench/
+template:
+  bootstrap: 5
+reference:
+- title: Design and run a comparison
+  contents: [comparison_design, planning_horizon, initialize_comparison, update_comparison, stopping_decision]
+- title: Results
+  contents: [comparison_report, tidy.seqbench_comparison, glance.seqbench_comparison, autoplot.seqbench_comparison]
+- title: Boundaries
+  contents: [seqbench_boundaries, boundary_kernels]
+- title: Re-exports
+  contents: [reexports]
+articles:
+- title: Vignettes
+  contents: [getting-started]

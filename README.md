@@ -25,15 +25,34 @@ practical relevance `δ`:
 
 ## Status
 
-Pre-alpha. The API below is a design target, not yet implemented.
+Pre-alpha, under active development. The core is implemented: four boundaries
+(betting, empirical Bernstein, Hoeffding, and an invalid fixed-sample negative
+control), instance-level updating with seeds as clusters, the three-way decision
+rule, budget accounting, and `print`, `summary`, `tidy`, `glance` and `autoplot`
+methods.
 
 ```r
-design <- comparison_design(alpha = 0.05, margin = 0.02, paired = TRUE)
+library(seqbench)
+
+design <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1),
+                            boundary = "betting", budget = 500)
 state  <- initialize_comparison(design)
-state  <- update_comparison(state, paired_losses)
-stopping_decision(state)
-comparison_report(state)
+
+# paired losses: one row per (instance, seed); losses within `bounds`
+losses <- data.frame(instance = 1:40, seed = 1,
+                     loss_a = runif(40, 0.1, 0.4), loss_b = runif(40, 0.3, 0.6))
+state  <- update_comparison(state, losses)
+
+stopping_decision(state)     # "A", "B", "equivalent", "continue" or "inconclusive"
+comparison_report(state)     # estimand, estimate, C_t, assumptions, cost, seeds, versions
+tidy(state)                  # trajectory, one row per instance
+ggplot2::autoplot(state)     # C_t against t with the [-margin, margin] band
 ```
+
+Instances are the sequential unit; several seeds of the same instance are
+averaged into one observation. Losses outside `bounds`, missing values and
+instances that reappear after their losses were seen are errors, never
+silently converted.
 
 ## Installation
 

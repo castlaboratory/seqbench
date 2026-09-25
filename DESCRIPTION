@@ -13,6 +13,19 @@ BugReports: https://github.com/castlaboratory/seqbench/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0
+Depends:
+    R (>= 4.1)
+Imports:
+    cli (>= 3.6.0),
+    generics,
+    ggplot2 (>= 3.5.0),
+    rlang (>= 1.1.0),
+    stats,
+    tibble (>= 3.2.0),
+    utils
 Suggests: 
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+VignetteBuilder: knitr

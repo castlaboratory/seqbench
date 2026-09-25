@@ -1,0 +1,18 @@
+Package: seqbench
+Title: Anytime-Valid Sequential Benchmarking of Algorithms
+Version: 0.0.0.9000
+Authors@R: 
+    person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre"))
+Description: Sequential, anytime-valid comparison of algorithms on paired
+    losses with a practical-equivalence margin. Confidence sequences for
+    the mean paired difference, superiority/equivalence/continue
+    decisions, cost accounting and auditable trajectories.
+License: GPL (>= 3)
+URL: https://github.com/castlaboratory/seqbench
+BugReports: https://github.com/castlaboratory/seqbench/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

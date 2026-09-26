@@ -37,3 +37,14 @@ test_that("variance-based planning horizon is far below the Hoeffding one and in
   expect_true(h_lo < h_hi && h_hi < h_guar)
   expect_error(planning_horizon(d, distance = 0.03, sd = 5), "exceeds")
 })
+
+test_that("planning_horizon respects max_t and validates counts", {
+  d <- comparison_design(margin = 0.02, bounds = c(0, 1))
+  h <- planning_horizon(d, distance = 0.9)
+  expect_true(is.finite(h) && h > 1)
+  expect_equal(planning_horizon(d, distance = 0.9, max_t = h), h)
+  expect_true(planning_horizon(d, distance = 0.9, max_t = h - 1) == Inf)
+  expect_true(planning_horizon(d, distance = 0.001, max_t = 100) == Inf)
+  expect_error(planning_horizon(d, distance = 0.1, max_t = 0), "max_t")
+  expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), n_max = 10.5), "whole number")
+})

@@ -61,8 +61,11 @@ seqbench_boundaries <- function() {
 #'
 #' @return `boundary_init()` and `boundary_update()` return a state object of
 #'   class `seqbench_boundary`. `boundary_interval()` returns a named numeric
-#'   vector `c(estimate, lower, upper)` on the `[0, 1]` scale; `lower > upper`
-#'   (with `NA`) signals an empty set.
+#'   vector `c(estimate, lower, upper)` on the `[0, 1]` scale. For the betting
+#'   boundary, `NA` endpoints mean that the exact confidence set is empty (a
+#'   possible event, of probability at most `alpha` under the assumptions); a
+#'   nonempty set narrower than one grid cell is located by searching the exact
+#'   capital, never reported as empty.
 #' @keywords internal
 #' @name boundary_kernels
 #' @examples
@@ -79,8 +82,12 @@ boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
   check_prob(alpha)
   check_prob(c)
   check_prob(theta)
-  if (!is.numeric(grid) || length(grid) != 1L || is.na(grid) || grid < 11) {
-    cli::cli_abort("{.arg grid} must be a single integer >= 11, not {.val {grid}}.")
+  if (!is.numeric(grid) || length(grid) != 1L || is.na(grid) || !is.finite(grid) ||
+      grid < 11 || grid != round(grid)) {
+    cli::cli_abort("{.arg grid} must be a single whole number >= 11, not {.val {grid}}.")
+  }
+  if (!is.logical(refine) || length(refine) != 1L || is.na(refine)) {
+    cli::cli_abort("{.arg refine} must be TRUE or FALSE.")
   }
   base <- list(name = name, alpha = alpha, t = 0L, sum_x = 0, sum_sq_dev = 0,
                valid = name != "naive_fixed")
@@ -223,8 +230,25 @@ boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL
   thr <- log(1 / st$alpha)
   inside <- which(log_k < thr)
   est <- st$m[which.min(log_k)]
+  f <- function(mm) betting_log_capital(mm, st$x_hist, st$lam_hist, st$c, st$theta) - thr
   if (length(inside) == 0L) {
-    return(c(estimate = est, lower = NA_real_, upper = NA_real_))
+    # No grid point is accepted, but B_t may still be a nonempty interval narrower
+    # than one grid cell. Search the exact capital on the two cells around the grid
+    # argmin before declaring the set empty.
+    j <- which.min(log_k)
+    lo_cell <- st$m[max(j - 1L, 1L)]; hi_cell <- st$m[min(j + 1L, length(st$m))]
+    opt <- stats::optimize(f, lower = lo_cell, upper = hi_cell, tol = 1e-10)
+    if (opt$objective >= 0) {
+      return(c(estimate = est, lower = NA_real_, upper = NA_real_))   # genuinely empty
+    }
+    est <- opt$minimum
+    if (isTRUE(st$refine)) {
+      lower <- bisect_root(f, lo_cell, opt$minimum, want = "lower")
+      upper <- bisect_root(f, opt$minimum, hi_cell, want = "upper")
+    } else {
+      lower <- lo_cell; upper <- hi_cell
+    }
+    return(c(estimate = est, lower = lower, upper = upper))
   }
   first <- inside[1]
   last <- inside[length(inside)]
@@ -238,7 +262,6 @@ boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL
     # Closed on both sides: a threshold that coincides with a grid point (e.g.
     # 0.49 / 0.51 on a 1001-point grid) must still trigger refinement.
     in_cell <- function(lo, hi) is.null(thresholds) || any(thresholds >= lo - 1e-12 & thresholds <= hi + 1e-12)
-    f <- function(mm) betting_log_capital(mm, st$x_hist, st$lam_hist, st$c, st$theta) - thr
     if (first > 1L && in_cell(lower, st$m[first])) lower <- bisect_root(f, lower, st$m[first], want = "lower")
     if (last < length(st$m) && in_cell(st$m[last], upper)) upper <- bisect_root(f, st$m[last], upper, want = "upper")
   }
@@ -249,6 +272,7 @@ boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL
 # where f(a) >= 0 > f(b) ("lower") or f(a) < 0 <= f(b) ("upper"). Returns a point
 # on the OUTSIDE of the crossing so that the reported interval still contains B_t.
 bisect_root <- function(f, a, b, want, iter = 24L) {
+  if (b - a < 1e-12) return(if (want == "lower") a else b)
   lo <- a; hi <- b
   for (i in seq_len(iter)) {
     mid <- (lo + hi) / 2

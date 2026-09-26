@@ -59,6 +59,9 @@ comparison_design <- function(alpha = 0.05, margin, bounds, boundary = "betting"
   check_positive(cost_per_round)
   check_positive(budget, allow_inf = TRUE)
   check_positive(n_max, allow_inf = TRUE)
+  if (is.finite(n_max) && n_max != round(n_max)) {
+    cli::cli_abort("{.arg n_max} must be a whole number or Inf, not {.val {n_max}}.")
+  }
   check_prob(betting_c)
   check_prob(betting_theta)
   range <- bounds[2] - bounds[1]
@@ -140,7 +143,9 @@ planning_horizon <- function(design, distance, sd = NULL, max_t = 1e6) {
     sigma2 <- (sd / rng)^2
     if (sigma2 > 0.25) cli::cli_abort("{.arg sd} exceeds the maximum possible for the declared bounds.")
   }
-  n <- 1024L
+  check_positive(max_t, allow_inf = FALSE)
+  max_t <- floor(max_t)
+  n <- min(1024L, max_t)
   repeat {
     w <- if (is.null(sd)) hoeffding_half_width(n, design$alpha)
          else eb_expected_half_width(n, design$alpha, sigma2, design$betting$c)

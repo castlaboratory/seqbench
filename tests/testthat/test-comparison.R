@@ -180,3 +180,9 @@ test_that("betting boundary with thresholds only refines when a threshold is in 
   expect_equal(near[["lower"]], full[["lower"]])            # lower refined, upper not
   expect_equal(near[["upper"]], raw[["upper"]])
 })
+
+test_that("infinite costs are rejected", {
+  st <- initialize_comparison(design)
+  bad <- make_losses(3, 0.1); bad$cost <- c(1, Inf, 1)
+  expect_error(update_comparison(st, bad), "finite")
+})

@@ -136,3 +136,33 @@ test_that("kernel argument checks", {
   expect_error(boundary_interval(list()), "boundary state")
   expect_no_error(print(boundary_init("betting")))
 })
+
+test_that("a nonempty betting set narrower than a grid cell is found, not reported empty", {
+  # Reviewer counterexample: constant stream at 0.55 with an 11-point grid. The exact
+  # capital at the true mean is log(1/2) < log(1/alpha), so the set contains 0.55.
+  st <- boundary_init("betting", alpha = 0.05, grid = 11L)
+  for (i in 1:200) st <- boundary_update(st, 0.55)
+  ci <- boundary_interval(st)
+  expect_false(anyNA(ci))
+  expect_true(ci[["lower"]] <= 0.55 && ci[["upper"]] >= 0.55)
+  expect_lt(ci[["upper"]] - ci[["lower"]], 0.1)                  # inside one cell
+  lk <- seqbench:::betting_log_capital(0.55, st$x_hist, st$lam_hist, st$c, st$theta)
+  expect_equal(lk, log(0.5), tolerance = 1e-10)
+  # unrefined variant returns the enclosing cell edges
+  st2 <- boundary_init("betting", alpha = 0.05, grid = 11L, refine = FALSE)
+  for (i in 1:200) st2 <- boundary_update(st2, 0.55)
+  ci2 <- boundary_interval(st2)
+  expect_true(ci2[["lower"]] <= ci[["lower"]] && ci2[["upper"]] >= ci[["upper"]])
+  # the same stream through the comparison layer must not stop with cs_empty
+  d <- comparison_design(margin = 0.02, bounds = c(0, 1), betting_grid = 11L)
+  l <- data.frame(instance = 1:200, loss_a = 0.6, loss_b = 0.5)   # D = 0.1 -> x = 0.55
+  s3 <- suppressWarnings(update_comparison(initialize_comparison(d), l))
+  expect_false(s3$diagnostics$cs_empty)
+  expect_equal(as.vector(stopping_decision(s3)), "B")
+})
+
+test_that("kernel rejects malformed grid and refine", {
+  expect_error(boundary_init("betting", grid = 100.5), "whole number")
+  expect_error(boundary_init("betting", grid = Inf), "whole number")
+  expect_error(boundary_init("betting", refine = NA), "refine")
+})

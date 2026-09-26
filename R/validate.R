@@ -49,8 +49,8 @@ validate_paired_losses <- function(losses, design, seen_instances,
         call = call)
     }
   }
-  if (any(losses$cost < 0)) {
-    cli::cli_abort("Column {.field cost} must be non-negative.", call = call)
+  if (any(losses$cost < 0) || any(!is.finite(losses$cost))) {
+    cli::cli_abort("Column {.field cost} must be finite and non-negative.", call = call)
   }
   key <- paste(losses$instance, losses$seed, sep = "\r")
   if (anyDuplicated(key)) {

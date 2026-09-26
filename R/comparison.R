@@ -170,6 +170,15 @@ update_comparison <- function(state, losses) {
       acc$lower[k] <- a + rng * ci[["lower"]]; acc$upper[k] <- a + rng * ci[["upper"]]
       acc$lower_running[k] <- a + rng * state$running[["lower"]]
       acc$upper_running[k] <- a + rng * state$running[["upper"]]
+      # The refined intersection can only be narrower: re-evaluate the decision so
+      # that state and trajectory stay consistent (in particular an empty set).
+      if (!state$stopped) {
+        dec <- decide(state$running, margin01, state$cost, acc$t[k], design)
+        state$decision <- dec$decision; state$stopping_reason <- dec$reason
+        state$stopped <- dec$decision != "continue"
+        if (identical(dec$reason, "cs_empty")) state$diagnostics$cs_empty <- TRUE
+        acc$decision[k] <- dec$decision
+      }
     }
   }
   keep <- row_t > 0L

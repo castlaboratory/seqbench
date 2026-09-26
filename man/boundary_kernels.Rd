@@ -55,8 +55,11 @@ cell wider per side. \code{NULL} (default) refines both endpoints.}
 \value{
 \code{boundary_init()} and \code{boundary_update()} return a state object of
 class \code{seqbench_boundary}. \code{boundary_interval()} returns a named numeric
-vector \code{c(estimate, lower, upper)} on the \verb{[0, 1]} scale; \code{lower > upper}
-(with \code{NA}) signals an empty set.
+vector \code{c(estimate, lower, upper)} on the \verb{[0, 1]} scale. For the betting
+boundary, \code{NA} endpoints mean that the exact confidence set is empty (a
+possible event, of probability at most \code{alpha} under the assumptions); a
+nonempty set narrower than one grid cell is located by searching the exact
+capital, never reported as empty.
 }
 \description{
 Low-level state machines behind the confidence sequences used by

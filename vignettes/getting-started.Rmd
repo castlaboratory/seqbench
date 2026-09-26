@@ -56,7 +56,8 @@ Typical stopping times are about half of these values.
 
 Instances are the sequential unit. Each row is one `(instance, seed)` pair with the losses of
 both algorithms; several seeds of the same instance are averaged into a single observation.
-Here we simulate a population where B loses 0.05 more than A on average:
+Here we simulate a population where `loss_a - loss_b` has mean 0.05, i.e. A loses 0.05
+more than B on average, so B should be declared relevantly better:
 
 ```{r}
 set.seed(42)
@@ -135,7 +136,7 @@ stopping_decision(st)
 
 | boundary | source | use |
 |---|---|---|
-| `"betting"` | hedged capital process, Waudby-Smith & Ramdas (2024) | default; tightest |
+| `"betting"` | hedged capital process, Waudby-Smith & Ramdas (2024) | default; tightest in the package's experiments |
 | `"empirical_bernstein"` | predictable-plug-in empirical Bernstein, same source | conservative reference |
 | `"hoeffding"` | predictable-plug-in Hoeffding, same source | distribution-free reference; very conservative |
 | `"naive_fixed"` | fixed-sample t interval recomputed at every step | **invalid**; negative control for experiments only |

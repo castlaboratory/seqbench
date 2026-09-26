@@ -21,7 +21,8 @@ practical relevance `δ`:
 | A is relevantly better | upper limit of `C_t` below `−δ` |
 | B is relevantly better | lower limit of `C_t` above `+δ` |
 | Practically equivalent | `C_t` inside `[−δ, +δ]` |
-| Inconclusive | otherwise (including budget exhausted) |
+| Continue | none of the above and budget remains |
+| Inconclusive | none of the above and the budget is exhausted (or `C_t` is empty) |
 
 ## Status
 

@@ -18,7 +18,7 @@ boundary_init(
 
 boundary_update(state, x)
 
-boundary_interval(state)
+boundary_interval(state, thresholds = NULL)
 }
 \arguments{
 \item{name}{One of \code{\link[=seqbench_boundaries]{seqbench_boundaries()}}.}
@@ -34,12 +34,23 @@ in (0, 1). Default 1/2.}
 \item{grid}{Number of grid points on \verb{[0, 1]} for the betting boundary.}
 
 \item{refine}{Logical; refine the betting interval endpoints by bisection on
-the exact capital (default \code{TRUE}).}
+the exact capital (default \code{TRUE}). Without refinement the endpoints are
+the outer boundaries of the grid cells that contain the true endpoints,
+which is conservative and keeps the coverage guarantee.}
 
 \item{state}{A boundary state returned by \code{boundary_init()} or
 \code{boundary_update()}.}
 
 \item{x}{A single number in \verb{[0, 1]}.}
+
+\item{thresholds}{Optional numeric vector of decision thresholds on the
+\verb{[0, 1]} scale. When given to \code{boundary_interval()} for the betting
+boundary, an endpoint is refined only if its grid cell contains one of
+them, which is the only case in which refinement can change a decision;
+this keeps the per-step cost linear in the grid size instead of linear in
+the number of observations. Decisions and stopping times are identical to
+full refinement; the reported running intersection can be up to one grid
+cell wider per side. \code{NULL} (default) refines both endpoints.}
 }
 \value{
 \code{boundary_init()} and \code{boundary_update()} return a state object of

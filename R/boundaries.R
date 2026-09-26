@@ -44,7 +44,17 @@ seqbench_boundaries <- function() {
 #'   in (0, 1). Default 1/2.
 #' @param grid Number of grid points on `[0, 1]` for the betting boundary.
 #' @param refine Logical; refine the betting interval endpoints by bisection on
-#'   the exact capital (default `TRUE`).
+#'   the exact capital (default `TRUE`). Without refinement the endpoints are
+#'   the outer boundaries of the grid cells that contain the true endpoints,
+#'   which is conservative and keeps the coverage guarantee.
+#' @param thresholds Optional numeric vector of decision thresholds on the
+#'   `[0, 1]` scale. When given to `boundary_interval()` for the betting
+#'   boundary, an endpoint is refined only if its grid cell contains one of
+#'   them, which is the only case in which refinement can change a decision;
+#'   this keeps the per-step cost linear in the grid size instead of linear in
+#'   the number of observations. Decisions and stopping times are identical to
+#'   full refinement; the reported running intersection can be up to one grid
+#'   cell wider per side. `NULL` (default) refines both endpoints.
 #' @param state A boundary state returned by `boundary_init()` or
 #'   `boundary_update()`.
 #' @param x A single number in `[0, 1]`.
@@ -185,7 +195,7 @@ betting_log_capital <- function(m, x_hist, lam_hist, c, theta) {
 
 #' @rdname boundary_kernels
 #' @export
-boundary_interval <- function(state) {
+boundary_interval <- function(state, thresholds = NULL) {
   if (!inherits(state, "seqbench_boundary")) {
     cli::cli_abort("{.arg state} must be a boundary state from {.fn boundary_init}.")
   }
@@ -200,13 +210,13 @@ plug_in_interval <- function(st) {
 }
 
 #' @export
-boundary_interval.seqbench_boundary_hoeffding <- function(state) plug_in_interval(state)
+boundary_interval.seqbench_boundary_hoeffding <- function(state, thresholds = NULL) plug_in_interval(state)
 
 #' @export
-boundary_interval.seqbench_boundary_empirical_bernstein <- function(state) plug_in_interval(state)
+boundary_interval.seqbench_boundary_empirical_bernstein <- function(state, thresholds = NULL) plug_in_interval(state)
 
 #' @export
-boundary_interval.seqbench_boundary_betting <- function(state) {
+boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL) {
   st <- state
   if (st$t == 0L) return(c(estimate = NA_real_, lower = 0, upper = 1))
   log_k <- pmax(log(st$theta) + st$log_k_plus, log(1 - st$theta) + st$log_k_minus)
@@ -223,9 +233,14 @@ boundary_interval.seqbench_boundary_betting <- function(state) {
   lower <- if (first > 1L) st$m[first - 1L] else 0
   upper <- if (last < length(st$m)) st$m[last + 1L] else 1
   if (isTRUE(st$refine)) {
+    # Lazy refinement: with thresholds, bisect an endpoint only when its cell
+    # contains a threshold (the only case where refinement can change a decision).
+    # Closed on both sides: a threshold that coincides with a grid point (e.g.
+    # 0.49 / 0.51 on a 1001-point grid) must still trigger refinement.
+    in_cell <- function(lo, hi) is.null(thresholds) || any(thresholds >= lo - 1e-12 & thresholds <= hi + 1e-12)
     f <- function(mm) betting_log_capital(mm, st$x_hist, st$lam_hist, st$c, st$theta) - thr
-    if (first > 1L) lower <- bisect_root(f, lower, st$m[first], want = "lower")
-    if (last < length(st$m)) upper <- bisect_root(f, st$m[last], upper, want = "upper")
+    if (first > 1L && in_cell(lower, st$m[first])) lower <- bisect_root(f, lower, st$m[first], want = "lower")
+    if (last < length(st$m) && in_cell(st$m[last], upper)) upper <- bisect_root(f, st$m[last], upper, want = "upper")
   }
   c(estimate = est, lower = lower, upper = upper)
 }
@@ -245,7 +260,7 @@ bisect_root <- function(f, a, b, want, iter = 24L) {
 }
 
 #' @export
-boundary_interval.seqbench_boundary_naive_fixed <- function(state) {
+boundary_interval.seqbench_boundary_naive_fixed <- function(state, thresholds = NULL) {
   st <- state
   if (st$t < 2L) return(c(estimate = if (st$t) st$sum_x else NA_real_, lower = 0, upper = 1))
   t <- st$t

@@ -1,6 +1,6 @@
 Package: seqbench
 Title: Anytime-Valid Sequential Benchmarking of Algorithms
-Version: 0.0.0.9000
+Version: 0.0.0.9001
 Authors@R: 
     person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre"))
 Description: Sequential, anytime-valid comparison of algorithms on paired

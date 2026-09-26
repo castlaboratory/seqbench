@@ -116,7 +116,7 @@ update_comparison <- function(state, losses) {
     cost <- sum(cs)
 
     state$boundary_state <- boundary_update(state$boundary_state, x)
-    ci <- boundary_interval(state$boundary_state)
+    ci <- boundary_interval(state$boundary_state, thresholds = c(0.5 - margin01, 0.5 + margin01))
     if (design$valid) {
       state$running <- c(lower = max(state$running[["lower"]], ci[["lower"]]),
                          upper = min(state$running[["upper"]], ci[["upper"]]))
@@ -157,6 +157,19 @@ update_comparison <- function(state, losses) {
           "i" = "Under the pre-registered protocol the experiment ends here."))
       }
       break
+    }
+  }
+  # Exact endpoints for the last processed instance (one refinement per call), so
+  # that reports and plots show the tight interval; the running intersection can
+  # only shrink, so validity and the decision already taken are unchanged.
+  if (k > 0L && design$boundary == "betting") {
+    ci <- boundary_interval(state$boundary_state)
+    if (!anyNA(ci[c("lower", "upper")]) && !anyNA(state$running)) {
+      state$running <- c(lower = max(state$running[["lower"]], ci[["lower"]]),
+                         upper = min(state$running[["upper"]], ci[["upper"]]))
+      acc$lower[k] <- a + rng * ci[["lower"]]; acc$upper[k] <- a + rng * ci[["upper"]]
+      acc$lower_running[k] <- a + rng * state$running[["lower"]]
+      acc$upper_running[k] <- a + rng * state$running[["upper"]]
     }
   }
   keep <- row_t > 0L

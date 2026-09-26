@@ -132,3 +132,51 @@ test_that("autoplot returns a ggplot and refuses an empty state", {
   st <- update_comparison(st, make_losses(10, 0.05, sd = 0.2)) |> suppressWarnings()
   expect_s3_class(ggplot2::autoplot(st), "ggplot")
 })
+
+test_that("lazy refinement of the betting boundary reproduces full refinement exactly", {
+  # Reference: full refinement at every step, replayed with the kernels directly.
+  replay_full <- function(x01, margin01, alpha = 0.05) {
+    st <- boundary_init("betting", alpha = alpha); L <- 0; U <- 1; dec <- "continue"; t <- 0L
+    for (x in x01) {
+      t <- t + 1L; st <- boundary_update(st, x); ci <- boundary_interval(st)
+      L <- max(L, ci[["lower"]]); U <- min(U, ci[["upper"]])
+      if (U < 0.5 - margin01) { dec <- "A"; break }
+      if (L > 0.5 + margin01) { dec <- "B"; break }
+      if (L >= 0.5 - margin01 && U <= 0.5 + margin01) { dec <- "equivalent"; break }
+    }
+    list(decision = if (dec == "continue") "inconclusive" else dec, t = t, L = L, U = U)
+  }
+  d <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1), n_max = 1500)
+  set.seed(11)
+  for (shift in c(0.06, -0.06, 0, 0.015)) {
+    l <- make_losses(1500, shift = shift, sd = 0.1, seed = 100 + round(shift * 1000))
+    st <- suppressWarnings(update_comparison(initialize_comparison(d), l))
+    x01 <- (l$loss_a - l$loss_b + 1) / 2
+    ref <- replay_full(x01[seq_len(nrow(st$trajectory))], margin01 = 0.02 / 2)
+    expect_identical(dec(st), ref$decision, info = paste("shift", shift))
+    expect_identical(nrow(st$trajectory), ref$t, info = paste("shift", shift))
+    # The reported running intersection contains the fully refined one and is at
+    # most one grid cell (1/1000 on [0, 1], i.e. 2/1000 in loss units) wider per side.
+    tr <- tidy(st)
+    lo_full <- -1 + 2 * ref$L; hi_full <- -1 + 2 * ref$U
+    expect_lte(tr$lower_running[nrow(tr)], lo_full + 1e-8)
+    expect_gte(tr$upper_running[nrow(tr)], hi_full - 1e-8)
+    expect_lte(lo_full - tr$lower_running[nrow(tr)], 2 / 1000 + 1e-8)
+    expect_lte(tr$upper_running[nrow(tr)] - hi_full, 2 / 1000 + 1e-8)
+  }
+})
+
+test_that("betting boundary with thresholds only refines when a threshold is in the cell", {
+  set.seed(3); x <- rbeta(300, 10, 30)
+  st <- boundary_init("betting", alpha = 0.05, grid = 401L)
+  for (v in x) st <- boundary_update(st, v)
+  full <- boundary_interval(st)
+  far <- boundary_interval(st, thresholds = c(0.9, 0.95))    # no threshold near the interval
+  raw <- boundary_interval(boundary_init("betting", alpha = 0.05, grid = 401L, refine = FALSE) |>
+                             (\(s) { for (v in x) s <- boundary_update(s, v); s })())
+  expect_equal(far, raw)                                    # outer cells, unrefined
+  expect_true(full[["lower"]] >= raw[["lower"]] && full[["upper"]] <= raw[["upper"]])
+  near <- boundary_interval(st, thresholds = c(full[["lower"]] + 1e-6, 0.99))
+  expect_equal(near[["lower"]], full[["lower"]])            # lower refined, upper not
+  expect_equal(near[["upper"]], raw[["upper"]])
+})

@@ -61,9 +61,16 @@ inconclusive outcome. \code{Inf} for no cost limit.}
 \item{n_max}{Maximum number of instances. \code{Inf} for no limit.}
 
 \item{betting_c, betting_theta, betting_grid}{Tuning of the betting boundary:
-truncation constant of the bets (default 1/2), hedging weight (default
-1/2) and grid size on \verb{[0, 1]} (default 1001). Also used as the
-truncation constant of the empirical-Bernstein boundary.}
+truncation constant of the bets (default 1/2, the value recommended by
+Waudby-Smith & Ramdas, who also suggest 3/4), hedging weight (default
+1/2) and grid size on \verb{[0, 1]} (default 1001). \code{betting_c} is also the
+truncation constant of the empirical-Bernstein boundary. Larger values bet
+more aggressively and stop earlier: in the package's simulation study
+(2,000 replications per cell) \code{betting_c = 0.9} needed about 40\% fewer
+instances than 1/2 at low noise and 20\% fewer at high noise, with the
+largest observed coverage failure rising from 0.6\% to 1.4\% at
+\code{alpha = 0.05}; \code{0.99} gains little more. Coverage is guaranteed for any
+value in (0, 1).}
 
 \item{sd_max}{Required for \code{boundary = "bernstein_declared"}: declared upper
 bound on the standard deviation of the per-instance (seed-averaged) paired

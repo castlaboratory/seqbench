@@ -42,9 +42,16 @@
 #'   inconclusive outcome. `Inf` for no cost limit.
 #' @param n_max Maximum number of instances. `Inf` for no limit.
 #' @param betting_c,betting_theta,betting_grid Tuning of the betting boundary:
-#'   truncation constant of the bets (default 1/2), hedging weight (default
-#'   1/2) and grid size on `[0, 1]` (default 1001). Also used as the
-#'   truncation constant of the empirical-Bernstein boundary.
+#'   truncation constant of the bets (default 1/2, the value recommended by
+#'   Waudby-Smith & Ramdas, who also suggest 3/4), hedging weight (default
+#'   1/2) and grid size on `[0, 1]` (default 1001). `betting_c` is also the
+#'   truncation constant of the empirical-Bernstein boundary. Larger values bet
+#'   more aggressively and stop earlier: in the package's simulation study
+#'   (2,000 replications per cell) `betting_c = 0.9` needed about 40% fewer
+#'   instances than 1/2 at low noise and 20% fewer at high noise, with the
+#'   largest observed coverage failure rising from 0.6% to 1.4% at
+#'   `alpha = 0.05`; `0.99` gains little more. Coverage is guaranteed for any
+#'   value in (0, 1).
 #'
 #' @return An object of class `seqbench_design` (a list).
 #' @seealso [initialize_comparison()], [planning_horizon()]

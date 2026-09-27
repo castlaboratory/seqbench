@@ -20,13 +20,15 @@
 #'
 #' @return A character vector. `"betting"` is the default in
 #'   [comparison_design()]; `"hoeffding"` and `"empirical_bernstein"` are
-#'   conservative references; `"naive_fixed"` is an invalid negative control for
+#'   conservative references; `"bernstein_declared"` requires a declared upper
+#'   bound on the standard deviation of the paired difference and is valid only
+#'   if that bound holds; `"naive_fixed"` is an invalid negative control for
 #'   experiments.
 #' @export
 #' @examples
 #' seqbench_boundaries()
 seqbench_boundaries <- function() {
-  c("betting", "empirical_bernstein", "hoeffding", "naive_fixed")
+  c("betting", "empirical_bernstein", "hoeffding", "bernstein_declared", "naive_fixed")
 }
 
 #' Boundary kernels (internal API)
@@ -43,6 +45,14 @@ seqbench_boundaries <- function() {
 #' @param theta Hedging weight on the "long" capital in the betting boundary,
 #'   in (0, 1). Default 1/2.
 #' @param grid Number of grid points on `[0, 1]` for the betting boundary.
+#' @param sd_max01 For `"bernstein_declared"`: declared upper bound on the
+#'   conditional standard deviation of the observations, on the `[0, 1]` scale
+#'   (at most 1/2). The boundary is a predictable-plug-in Bennett confidence
+#'   sequence: for `X in [0, 1]` with conditional mean `mu` and conditional
+#'   variance at most `sd_max01^2`, `exp(lambda (X - mu) - sd_max01^2 (e^lambda - 1 - lambda))`
+#'   is a supermartingale for every predictable `lambda >= 0` (Bennett's
+#'   inequality), and the same holds for `-(X - mu)`. Coverage is guaranteed
+#'   only if the declared bound is true.
 #' @param refine Logical; refine the betting interval endpoints by bisection on
 #'   the exact capital (default `TRUE`). Without refinement the endpoints are
 #'   the outer boundaries of the grid cells that contain the true endpoints,
@@ -77,7 +87,7 @@ NULL
 #' @rdname boundary_kernels
 #' @export
 boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
-                          theta = 0.5, grid = 1001L, refine = TRUE) {
+                          theta = 0.5, grid = 1001L, refine = TRUE, sd_max01 = NULL) {
   name <- rlang::arg_match(name)
   check_prob(alpha)
   check_prob(c)
@@ -89,10 +99,17 @@ boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
   if (!is.logical(refine) || length(refine) != 1L || is.na(refine)) {
     cli::cli_abort("{.arg refine} must be TRUE or FALSE.")
   }
+  if (name == "bernstein_declared") {
+    if (is.null(sd_max01) || !is.numeric(sd_max01) || length(sd_max01) != 1L ||
+        is.na(sd_max01) || sd_max01 <= 0 || sd_max01 > 0.5) {
+      cli::cli_abort("{.arg sd_max01} must be a single number in (0, 1/2] for the {.val bernstein_declared} boundary.")
+    }
+  }
   base <- list(name = name, alpha = alpha, t = 0L, sum_x = 0, sum_sq_dev = 0,
                valid = name != "naive_fixed")
   st <- switch(name,
     hoeffding = c(base, list(sum_lam = 0, sum_lam_x = 0, sum_psi = 0)),
+    bernstein_declared = c(base, list(sigma2 = sd_max01^2, sum_lam = 0, sum_lam_x = 0, sum_psi = 0)),
     empirical_bernstein = c(base, list(c = c, sum_lam = 0, sum_lam_x = 0, sum_psi = 0)),
     betting = c(base, list(
       c = c, theta = theta, refine = isTRUE(refine),
@@ -160,6 +177,27 @@ boundary_update.seqbench_boundary_empirical_bernstein <- function(state, x) {
 }
 
 #' @export
+boundary_update.seqbench_boundary_bernstein_declared <- function(state, x) {
+  st <- state
+  st$t <- st$t + 1L
+  lam <- bennett_lambda(st$t, st$alpha, st$sigma2)
+  st$sum_lam <- st$sum_lam + lam
+  st$sum_lam_x <- st$sum_lam_x + lam * x
+  st$sum_psi <- st$sum_psi + st$sigma2 * (exp(lam) - 1 - lam)
+  push_running(st, x)
+}
+
+# Predictable bet for the Bennett boundary: minimises the half-width that t
+# observations would give if lambda were held constant, i.e.
+# (log(2/alpha) + sigma2 * t * (e^lambda - 1 - lambda)) / (t * lambda),
+# a convex problem in lambda solved by one-dimensional optimisation.
+bennett_lambda <- function(t, alpha, sigma2) {
+  A <- log(2 / alpha)
+  f <- function(l) (A + sigma2 * t * (exp(l) - 1 - l)) / (t * l)
+  stats::optimize(f, lower = 1e-6, upper = 40, tol = 1e-8)$minimum
+}
+
+#' @export
 boundary_update.seqbench_boundary_betting <- function(state, x) {
   st <- state
   prev <- running_prev(st)
@@ -221,6 +259,9 @@ boundary_interval.seqbench_boundary_hoeffding <- function(state, thresholds = NU
 
 #' @export
 boundary_interval.seqbench_boundary_empirical_bernstein <- function(state, thresholds = NULL) plug_in_interval(state)
+
+#' @export
+boundary_interval.seqbench_boundary_bernstein_declared <- function(state, thresholds = NULL) plug_in_interval(state)
 
 #' @export
 boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL) {

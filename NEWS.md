@@ -1,3 +1,11 @@
+# seqbench 0.0.0.9002
+
+* New boundary `"bernstein_declared"`: predictable-plug-in Bennett confidence
+  sequence with a declared upper bound `sd_max` on the standard deviation of the
+  paired difference (assumption A5, recorded in the report). Valid only if the
+  declared bound holds; its gain over betting is modest because the Bennett range
+  term keeps a `log(2/alpha)/t` floor for bounded observations.
+
 # seqbench 0.0.0.9001
 
 * Betting boundary: endpoint refinement by bisection is now lazy inside

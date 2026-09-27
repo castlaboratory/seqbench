@@ -48,3 +48,18 @@ test_that("planning_horizon respects max_t and validates counts", {
   expect_error(planning_horizon(d, distance = 0.1, max_t = 0), "max_t")
   expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), n_max = 10.5), "whole number")
 })
+
+test_that("bernstein_declared design requires sd_max and records assumption A5", {
+  expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), boundary = "bernstein_declared"), "sd_max")
+  expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), boundary = "bernstein_declared", sd_max = 5), "exceeds")
+  expect_warning(comparison_design(margin = 0.02, bounds = c(0, 1), sd_max = 0.1), "ignored")
+  d <- comparison_design(margin = 0.02, bounds = c(0, 1), boundary = "bernstein_declared", sd_max = 0.05)
+  st <- initialize_comparison(d)
+  expect_true("A5" %in% names(comparison_report(st)$assumptions))
+  set.seed(3)
+  l <- data.frame(instance = 1:300, loss_a = runif(300, .4, .8))
+  l$loss_b <- l$loss_a - 0.05 + runif(300, -.05, .05)
+  st <- suppressWarnings(update_comparison(st, l))
+  expect_equal(as.vector(stopping_decision(st)), "B")
+  expect_lt(nrow(tidy(st)), 300)
+})

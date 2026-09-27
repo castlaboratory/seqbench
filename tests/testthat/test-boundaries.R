@@ -166,3 +166,35 @@ test_that("kernel rejects malformed grid and refine", {
   expect_error(boundary_init("betting", grid = Inf), "whole number")
   expect_error(boundary_init("betting", refine = NA), "refine")
 })
+
+test_that("bernstein_declared matches its closed form and shrinks with the declared sd", {
+  sig <- 0.03 / 2                       # sd 0.03 in loss units on bounds [0,1] -> [0,1] scale
+  r <- run_kernel("bernstein_declared", x, sd_max01 = sig)
+  # oracle
+  A <- log(2 / 0.05); t <- seq_along(x)
+  lam <- vapply(t, function(tt) optimize(function(l) (A + sig^2 * tt * (exp(l) - 1 - l)) / (tt * l), c(1e-6, 40), tol = 1e-8)$minimum, numeric(1))
+  S <- cumsum(lam); center <- cumsum(lam * x) / S
+  half <- (A + sig^2 * cumsum(exp(lam) - 1 - lam)) / S
+  expect_equal(unname(r$path[, "estimate"]), center, tolerance = 1e-6)
+  expect_equal(unname(r$path[, "upper"] - r$path[, "lower"]), pmin(center + half, 1) - pmax(center - half, 0), tolerance = 1e-6)
+  # larger declared sd -> wider
+  r2 <- run_kernel("bernstein_declared", x, sd_max01 = 0.2)
+  expect_true(all(r2$path[, "upper"] - r2$path[, "lower"] >= r$path[, "upper"] - r$path[, "lower"] - 1e-12))
+  # with a correct small declared sd it is narrower than betting at t = 200 for this low-noise stream
+  b <- run_kernel("betting", x)$path[200, ]
+  expect_lt(r$path[200, "upper"] - r$path[200, "lower"], b[["upper"]] - b[["lower"]])
+  expect_error(boundary_init("bernstein_declared"), "sd_max01")
+  expect_error(boundary_init("bernstein_declared", sd_max01 = 0.7), "sd_max01")
+})
+
+test_that("bernstein_declared keeps time-uniform coverage when the declared sd is true", {
+  skip_on_cran()
+  R <- 300L; n <- 200L; alpha <- 0.1; miss <- 0
+  set.seed(11)
+  for (r in seq_len(R)) {
+    z <- 0.5 + runif(n, -0.05, 0.05)             # sd = 0.05/sqrt(3) = 0.0289
+    p <- run_kernel("bernstein_declared", z, alpha = alpha, sd_max01 = 0.0289)$path
+    miss <- miss + any(cummax(p[, "lower"]) > 0.5 | cummin(p[, "upper"]) < 0.5)
+  }
+  expect_lte(miss / R, alpha + 3 * sqrt(alpha * (1 - alpha) / R))
+})

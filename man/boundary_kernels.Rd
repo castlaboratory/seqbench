@@ -13,7 +13,8 @@ boundary_init(
   c = 0.5,
   theta = 0.5,
   grid = 1001L,
-  refine = TRUE
+  refine = TRUE,
+  sd_max01 = NULL
 )
 
 boundary_update(state, x)
@@ -37,6 +38,15 @@ in (0, 1). Default 1/2.}
 the exact capital (default \code{TRUE}). Without refinement the endpoints are
 the outer boundaries of the grid cells that contain the true endpoints,
 which is conservative and keeps the coverage guarantee.}
+
+\item{sd_max01}{For \code{"bernstein_declared"}: declared upper bound on the
+conditional standard deviation of the observations, on the \verb{[0, 1]} scale
+(at most 1/2). The boundary is a predictable-plug-in Bennett confidence
+sequence: for \verb{X in [0, 1]} with conditional mean \code{mu} and conditional
+variance at most \code{sd_max01^2}, \code{exp(lambda (X - mu) - sd_max01^2 (e^lambda - 1 - lambda))}
+is a supermartingale for every predictable \code{lambda >= 0} (Bennett's
+inequality), and the same holds for \code{-(X - mu)}. Coverage is guaranteed
+only if the declared bound is true.}
 
 \item{state}{A boundary state returned by \code{boundary_init()} or
 \code{boundary_update()}.}

@@ -23,7 +23,8 @@ initialize_comparison <- function(design) {
   assert_design(design)
   bnd <- boundary_init(design$boundary, alpha = design$alpha,
                        c = design$betting$c, theta = design$betting$theta,
-                       grid = design$betting$grid)
+                       grid = design$betting$grid,
+                       sd_max01 = if (!is.null(design$sd_max)) design$sd_max / (design$diff_bounds[2] - design$diff_bounds[1]) else NULL)
   structure(list(
     design = design,
     boundary_state = bnd,

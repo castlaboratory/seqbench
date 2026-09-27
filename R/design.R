@@ -19,9 +19,21 @@
 #' @param boundary One of [seqbench_boundaries()]. `"betting"` (default) is the
 #'   hedged capital confidence sequence of Waudby-Smith & Ramdas (2024);
 #'   `"empirical_bernstein"` and `"hoeffding"` are their conservative
-#'   predictable-plug-in references; `"naive_fixed"` is a fixed-sample t
-#'   interval recomputed at every step, **not valid** under optional stopping,
-#'   provided only as a negative control for experiments.
+#'   predictable-plug-in references; `"bernstein_declared"` is a
+#'   predictable-plug-in Bennett confidence sequence that uses a declared upper
+#'   bound `sd_max` on the standard deviation of the paired difference and is
+#'   valid only if that bound holds. Its gain over the betting boundary is
+#'   modest (a logarithmic factor in the declared variance): for bounded
+#'   observations the Bennett bound keeps a range term of order
+#'   `log(2/alpha) / t` whatever the variance, so the boundary is provided for
+#'   completeness and for the package's cost study rather than as a shortcut;
+#'   `"naive_fixed"` is a fixed-sample t interval recomputed at
+#'   every step, **not valid** under optional stopping, provided only as a
+#'   negative control for experiments.
+#' @param sd_max Required for `boundary = "bernstein_declared"`: declared upper
+#'   bound on the standard deviation of the per-instance (seed-averaged) paired
+#'   difference, in loss units. This is an additional assumption (A5) recorded
+#'   in the result contract.
 #' @param paired Must be `TRUE`. Unpaired designs are not implemented; the
 #'   argument exists so that the limitation is explicit.
 #' @param cost_per_round Default cost of one `(instance, seed)` evaluation of
@@ -46,7 +58,7 @@
 comparison_design <- function(alpha = 0.05, margin, bounds, boundary = "betting",
                               paired = TRUE, cost_per_round = 1, budget = Inf,
                               n_max = Inf, betting_c = 0.5, betting_theta = 0.5,
-                              betting_grid = 1001L) {
+                              betting_grid = 1001L, sd_max = NULL) {
   check_prob(alpha)
   check_positive(margin)
   check_bounds(bounds)
@@ -65,6 +77,16 @@ comparison_design <- function(alpha = 0.05, margin, bounds, boundary = "betting"
   check_prob(betting_c)
   check_prob(betting_theta)
   range <- bounds[2] - bounds[1]
+  if (boundary == "bernstein_declared") {
+    if (is.null(sd_max)) {
+      cli::cli_abort(c("{.arg sd_max} is required for {.code boundary = \"bernstein_declared\"}.",
+                       "i" = "Declare an upper bound on the standard deviation of the paired difference, in loss units. Coverage holds only if it is true."))
+    }
+    check_positive(sd_max)
+    if (sd_max > range) cli::cli_abort("{.arg sd_max} exceeds the largest possible standard deviation for the declared bounds.")
+  } else if (!is.null(sd_max)) {
+    cli::cli_warn("{.arg sd_max} is ignored unless {.code boundary = \"bernstein_declared\"}.")
+  }
   if (margin >= range) {
     cli::cli_abort(c(
       "{.arg margin} must be smaller than the range of the paired difference.",
@@ -76,6 +98,7 @@ comparison_design <- function(alpha = 0.05, margin, bounds, boundary = "betting"
     boundary = boundary, paired = TRUE, cost_per_round = cost_per_round,
     budget = budget, n_max = n_max,
     betting = list(c = betting_c, theta = betting_theta, grid = as.integer(betting_grid)),
+    sd_max = if (boundary == "bernstein_declared") sd_max else NULL,
     valid = boundary != "naive_fixed",
     created = Sys.time()
   ), class = "seqbench_design")
@@ -87,7 +110,7 @@ print.seqbench_design <- function(x, ...) {
   cli::cli_h1("seqbench comparison design")
   cli::cli_inform(c(
     "*" = "Boundary: {.field {x$boundary}}{if (!x$valid) ' (INVALID: negative control, not a confidence sequence)' else ''}",
-    "*" = "alpha = {.val {x$alpha}}, margin = {.val {x$margin}} (loss units)",
+    "*" = "alpha = {.val {x$alpha}}, margin = {.val {x$margin}} (loss units){if (!is.null(x$sd_max)) paste0(', declared sd_max = ', x$sd_max, ' (assumption A5)') else ''}",
     "*" = "Loss bounds: [{x$bounds[1]}, {x$bounds[2]}]; paired difference in [{x$diff_bounds[1]}, {x$diff_bounds[2]}]",
     "*" = "Budget: {if (is.finite(x$budget)) x$budget else 'unlimited'} cost units, n_max = {if (is.finite(x$n_max)) x$n_max else 'unlimited'} instances, cost per round = {x$cost_per_round}"
   ))

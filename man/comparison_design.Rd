@@ -15,7 +15,8 @@ comparison_design(
   n_max = Inf,
   betting_c = 0.5,
   betting_theta = 0.5,
-  betting_grid = 1001L
+  betting_grid = 1001L,
+  sd_max = NULL
 )
 }
 \arguments{
@@ -36,9 +37,17 @@ A loss outside the bounds is an error, never clipped.}
 \item{boundary}{One of \code{\link[=seqbench_boundaries]{seqbench_boundaries()}}. \code{"betting"} (default) is the
 hedged capital confidence sequence of Waudby-Smith & Ramdas (2024);
 \code{"empirical_bernstein"} and \code{"hoeffding"} are their conservative
-predictable-plug-in references; \code{"naive_fixed"} is a fixed-sample t
-interval recomputed at every step, \strong{not valid} under optional stopping,
-provided only as a negative control for experiments.}
+predictable-plug-in references; \code{"bernstein_declared"} is a
+predictable-plug-in Bennett confidence sequence that uses a declared upper
+bound \code{sd_max} on the standard deviation of the paired difference and is
+valid only if that bound holds. Its gain over the betting boundary is
+modest (a logarithmic factor in the declared variance): for bounded
+observations the Bennett bound keeps a range term of order
+\code{log(2/alpha) / t} whatever the variance, so the boundary is provided for
+completeness and for the package's cost study rather than as a shortcut;
+\code{"naive_fixed"} is a fixed-sample t interval recomputed at
+every step, \strong{not valid} under optional stopping, provided only as a
+negative control for experiments.}
 
 \item{paired}{Must be \code{TRUE}. Unpaired designs are not implemented; the
 argument exists so that the limitation is explicit.}
@@ -55,6 +64,11 @@ inconclusive outcome. \code{Inf} for no cost limit.}
 truncation constant of the bets (default 1/2), hedging weight (default
 1/2) and grid size on \verb{[0, 1]} (default 1001). Also used as the
 truncation constant of the empirical-Bernstein boundary.}
+
+\item{sd_max}{Required for \code{boundary = "bernstein_declared"}: declared upper
+bound on the standard deviation of the per-instance (seed-averaged) paired
+difference, in loss units. This is an additional assumption (A5) recorded
+in the result contract.}
 }
 \value{
 An object of class \code{seqbench_design} (a list).

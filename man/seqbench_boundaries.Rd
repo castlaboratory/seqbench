@@ -9,7 +9,9 @@ seqbench_boundaries()
 \value{
 A character vector. \code{"betting"} is the default in
 \code{\link[=comparison_design]{comparison_design()}}; \code{"hoeffding"} and \code{"empirical_bernstein"} are
-conservative references; \code{"naive_fixed"} is an invalid negative control for
+conservative references; \code{"bernstein_declared"} requires a declared upper
+bound on the standard deviation of the paired difference and is valid only
+if that bound holds; \code{"naive_fixed"} is an invalid negative control for
 experiments.
 }
 \description{

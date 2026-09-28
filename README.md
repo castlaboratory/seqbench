@@ -1,4 +1,4 @@
-# seqbench
+# seqbench <a href="https://castlaboratory.github.io/seqbench/"><img src="man/figures/logo.png" align="right" height="139" alt="seqbench logo" /></a>
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml)

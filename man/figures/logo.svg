@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 518 600"
+     width="518" height="600"
+     role="img" aria-label="seqbench hex logo">
+  <title>seqbench</title>
+  <desc>Hex sticker for the seqbench R package: a confidence sequence for the mean paired difference narrows around the true mean as instances accumulate, a shaded band marks the margin of practical equivalence, and the comparison stops the moment the sequence clears the band; the budget that was not spent is drawn faded.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#EEF2F7"/>
+    </linearGradient>
+    <clipPath id="hexClip">
+      <path d="M259 0 L518 150 L518 450 L259 600 L0 450 L0 150 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background hex -->
+  <path d="M259 0 L518 150 L518 450 L259 600 L0 450 L0 150 Z" fill="url(#bg)"/>
+
+  <!-- Outer hex border, drawn inside the clip -->
+  <g clip-path="url(#hexClip)">
+    <path d="M259 0 L518 150 L518 450 L259 600 L0 450 L0 150 Z"
+          fill="none" stroke="#0054AD" stroke-width="20" stroke-linejoin="miter"/>
+  </g>
+
+  <!-- Inner hex hairline -->
+  <path d="M259 22 L498 161 L498 439 L259 578 L20 439 L20 161 Z"
+        fill="none" stroke="#0054AD" stroke-width="1" opacity="0.25"/>
+
+  <!-- Margin of practical equivalence: band [-delta, +delta] around zero -->
+  <rect x="64" y="285" width="390" height="30" fill="#0054AD" opacity="0.08"/>
+  <line x1="64" y1="300" x2="454" y2="300" stroke="#1F2937" stroke-width="1" opacity="0.35" stroke-dasharray="3 4"/>
+  <g font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0054AD" opacity="0.7">
+    <text x="58" y="290" text-anchor="end">+δ</text>
+    <text x="58" y="320" text-anchor="end">−δ</text>
+  </g>
+
+  <!-- True mean paired difference -->
+  <line x1="64" y1="252" x2="454" y2="252" stroke="#D97706" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- Confidence sequence: region and limits up to the stopping time -->
+  <polygon points="64,142.0 70,153.2 76,161.6 82,168.1 88,173.4 94,177.8 100,181.6 106,184.8 112,187.6 118,190.1 124,192.3 130,194.3 136,196.2 142,197.8 148,199.3 154,200.7 160,202.0 166,203.2 172,204.3 178,205.3 184,206.3 190,207.2 196,208.1 202,208.9 208,209.7 214,210.4 220,211.1 226,211.8 232,212.4 238,213.0 244,213.6 250,214.1 256,214.7 262,215.2 268,215.7 274,216.1 280,216.6 286,217.0 292,217.4 298,217.8 304,218.2 310,218.6 316,219.0 322,219.3 322,284.7 316,285.0 310,285.4 304,285.8 298,286.2 292,286.6 286,287.0 280,287.4 274,287.9 268,288.3 262,288.8 256,289.3 250,289.9 244,290.4 238,291.0 232,291.6 226,292.2 220,292.9 214,293.6 208,294.3 202,295.1 196,295.9 190,296.8 184,297.7 178,298.7 172,299.7 166,300.8 160,302.0 154,303.3 148,304.7 142,306.2 136,307.8 130,309.7 124,311.7 118,313.9 112,316.4 106,319.2 100,322.4 94,326.2 88,330.6 82,335.9 76,342.4 70,350.8 64,362.0" fill="#0054AD" opacity="0.13"/>
+  <polyline points="64,142.0 70,153.2 76,161.6 82,168.1 88,173.4 94,177.8 100,181.6 106,184.8 112,187.6 118,190.1 124,192.3 130,194.3 136,196.2 142,197.8 148,199.3 154,200.7 160,202.0 166,203.2 172,204.3 178,205.3 184,206.3 190,207.2 196,208.1 202,208.9 208,209.7 214,210.4 220,211.1 226,211.8 232,212.4 238,213.0 244,213.6 250,214.1 256,214.7 262,215.2 268,215.7 274,216.1 280,216.6 286,217.0 292,217.4 298,217.8 304,218.2 310,218.6 316,219.0 322,219.3" fill="none" stroke="#0054AD" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline points="64,362.0 70,350.8 76,342.4 82,335.9 88,330.6 94,326.2 100,322.4 106,319.2 112,316.4 118,313.9 124,311.7 130,309.7 136,307.8 142,306.2 148,304.7 154,303.3 160,302.0 166,300.8 172,299.7 178,298.7 184,297.7 190,296.8 196,295.9 202,295.1 208,294.3 214,293.6 220,292.9 226,292.2 232,291.6 238,291.0 244,290.4 250,289.9 256,289.3 262,288.8 268,288.3 274,287.9 280,287.4 286,287.0 292,286.6 298,286.2 304,285.8 310,285.4 316,285.0 322,284.7" fill="none" stroke="#0054AD" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Budget not spent: the sequence would have continued, faded -->
+  <polyline points="322,219.3 328,219.6 334,220.0 340,220.3 346,220.6 352,220.9 358,221.2 364,221.5 370,221.8 376,222.0 382,222.3 388,222.6 394,222.8 400,223.1 406,223.3 412,223.5 418,223.7 424,224.0 430,224.2 436,224.4 442,224.6 448,224.8 454,225.0" fill="none" stroke="#0054AD" stroke-width="1.5" opacity="0.25" stroke-dasharray="4 5"/>
+  <polyline points="322,284.7 328,284.4 334,284.0 340,283.7 346,283.4 352,283.1 358,282.8 364,282.5 370,282.2 376,282.0 382,281.7 388,281.4 394,281.2 400,280.9 406,280.7 412,280.5 418,280.3 424,280.0 430,279.8 436,279.6 442,279.4 448,279.2 454,279.0" fill="none" stroke="#0054AD" stroke-width="1.5" opacity="0.25" stroke-dasharray="4 5"/>
+
+  <!-- Observed paired differences -->
+  <g fill="#1F2937" opacity="0.55">
+      <circle cx="74" cy="248.4" r="3.2"/>
+      <circle cx="96" cy="259.2" r="3.2"/>
+      <circle cx="118" cy="248.8" r="3.2"/>
+      <circle cx="140" cy="247.6" r="3.2"/>
+      <circle cx="162" cy="239.0" r="3.2"/>
+      <circle cx="184" cy="249.0" r="3.2"/>
+      <circle cx="206" cy="267.6" r="3.2"/>
+      <circle cx="228" cy="257.9" r="3.2"/>
+      <circle cx="250" cy="266.5" r="3.2"/>
+      <circle cx="272" cy="255.5" r="3.2"/>
+      <circle cx="294" cy="257.5" r="3.2"/>
+      <circle cx="316" cy="254.6" r="3.2"/>
+  </g>
+
+  <!-- Stopping time: the lower limit clears +delta -->
+  <line x1="322" y1="150" x2="322" y2="420" stroke="#16A34A" stroke-width="2" stroke-dasharray="6 5"/>
+  <circle cx="322" cy="284.7" r="7" fill="#16A34A" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="330" y="166" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#16A34A">stop</text>
+
+  <!-- Wordmark -->
+  <text x="259" y="500" text-anchor="middle"
+        font-family="Helvetica, Arial, 'Source Sans 3', 'Source Sans Pro', sans-serif"
+        font-weight="800" font-size="64" letter-spacing="-1.2" fill="#0054AD">seqbench</text>
+</svg>

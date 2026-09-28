@@ -3,6 +3,7 @@
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![CRAN status](https://www.r-pkg.org/badges/version/seqbench)](https://CRAN.R-project.org/package=seqbench)
 <!-- badges: end -->
 
 **Anytime-valid sequential benchmarking of algorithms.**
@@ -26,8 +27,9 @@ practical relevance `δ`:
 
 ## Status
 
-Pre-alpha, under active development. The core is implemented: four boundaries
-(betting, empirical Bernstein, Hoeffding, and an invalid fixed-sample negative
+Version 0.1.0, first release; the API is experimental and may change in minor
+releases. Implemented: five boundaries (betting, empirical Bernstein, Hoeffding,
+Bernstein with a declared variance bound, and an invalid fixed-sample negative
 control), instance-level updating with seeds as clusters, the three-way decision
 rule, budget accounting, and `print`, `summary`, `tidy`, `glance` and `autoplot`
 methods.
@@ -58,6 +60,9 @@ silently converted.
 ## Installation
 
 ```r
+install.packages("seqbench")            # CRAN, once released
+
+# development version
 # install.packages("pak")
 pak::pak("castlaboratory/seqbench")
 ```

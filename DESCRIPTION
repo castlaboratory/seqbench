@@ -1,6 +1,6 @@
 Package: seqbench
 Title: Anytime-Valid Sequential Benchmarking of Algorithms
-Version: 0.0.0.9002
+Version: 0.1.0
 Authors@R: c(
     person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre")),
     person("Raydonal", "Ospina", , "raydonal@castlab.org", role = "aut"),

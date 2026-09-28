@@ -1,0 +1,20 @@
+year <- if (!is.null(meta$Date)) sub("-.*", "", meta$Date) else format(Sys.Date(), "%Y")
+ver  <- meta$Version
+
+bibentry(
+  bibtype = "Manual",
+  title   = "seqbench: Anytime-Valid Sequential Benchmarking of Algorithms",
+  author  = c(
+    person("André",     "Leite",  email = "leite@castlab.org", role = c("aut", "cre")),
+    person("Raydonal",  "Ospina", email = "raydonal@castlab.org", role = "aut"),
+    person("Cristiano", "Ferraz", email = "cferraz@castlab.org", role = "aut")
+  ),
+  year    = year,
+  note    = sprintf("R package version %s", ver),
+  url     = "https://github.com/castlaboratory/seqbench",
+  textVersion = paste0(
+    "Leite, A., Ospina, R., & Ferraz, C. (", year,
+    "). seqbench: Anytime-Valid Sequential Benchmarking of Algorithms. ",
+    "R package version ", ver, ". https://github.com/castlaboratory/seqbench"
+  )
+)

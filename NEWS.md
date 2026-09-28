@@ -1,3 +1,16 @@
+# seqbench 0.1.0
+
+First CRAN release. Development history (0.0.0.9000 to 0.0.0.9002) is kept below.
+
+* `comparison_design()`, `initialize_comparison()`, `update_comparison()`,
+  `stopping_decision()`, `comparison_report()`, `planning_horizon()`; S3 methods
+  `print`, `summary`, `tidy`, `glance`, `autoplot` for `seqbench_comparison`.
+* Boundaries: `"betting"` (default; Waudby-Smith & Ramdas 2024), `"empirical_bernstein"`,
+  `"hoeffding"`, `"bernstein_declared"` (declared `sd_max`, assumption A5) and the invalid
+  negative control `"naive_fixed"`, labelled as such in every output.
+* Internal kernels `boundary_init()`, `boundary_update()`, `boundary_interval()` exported
+  for sister packages.
+
 # seqbench 0.0.0.9002
 
 * New boundary `"bernstein_declared"`: predictable-plug-in Bennett confidence

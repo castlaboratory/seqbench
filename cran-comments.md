@@ -23,4 +23,5 @@ First submission.
 * Examples and tests run in well under a minute; no example is wrapped in
   `\dontrun{}`.
 * The companion article (The R Journal, in preparation) and its experiments
-  live in the GitHub repository outside the package tarball.
+  live in a separate repository (castlaboratory/seqbench-paper), not in the
+  package.

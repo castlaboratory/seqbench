@@ -22,6 +22,8 @@ Useful links:
 Authors:
 \itemize{
   \item André Leite \email{leite@castlab.org}
+  \item Raydonal Ospina \email{raydonal@castlab.org}
+  \item Cristiano Ferraz \email{cferraz@castlab.org}
 }
 
 }

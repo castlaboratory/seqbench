@@ -11,7 +11,7 @@ Description: Sequential, anytime-valid comparison of algorithms on paired
     the mean paired difference, superiority/equivalence/continue
     decisions, cost accounting and auditable trajectories.
 License: GPL (>= 3)
-URL: https://github.com/castlaboratory/seqbench
+URL: https://castlaboratory.github.io/seqbench/, https://github.com/castlaboratory/seqbench
 BugReports: https://github.com/castlaboratory/seqbench/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

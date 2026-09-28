@@ -56,6 +56,11 @@ averaged into one observation. Losses outside `bounds`, missing values and
 instances that reappear after their losses were seen are errors, never
 silently converted.
 
+## Documentation
+
+Full reference, the getting-started vignette and the changelog are on the package site:
+<https://castlaboratory.github.io/seqbench/>.
+
 ## Installation
 
 ```r

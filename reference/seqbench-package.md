@@ -26,6 +26,7 @@ Authors:
   ([ORCID](https://orcid.org/0000-0002-4718-9766))
 
 - Raydonal Ospina <raydonal@castlab.org>
+  ([ORCID](https://orcid.org/0000-0002-9884-9090))
 
 - Cristiano Ferraz <cferraz@castlab.org>
   ([ORCID](https://orcid.org/0000-0002-6838-6734))

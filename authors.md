@@ -6,6 +6,7 @@
   [](https://orcid.org/0000-0002-4718-9766)
 
 - **[Raydonal Ospina](https://castlab.org)**. Author.
+  [](https://orcid.org/0000-0002-9884-9090)
 
 - **[Cristiano Ferraz](https://castlab.org)**. Author.
   [](https://orcid.org/0000-0002-6838-6734)

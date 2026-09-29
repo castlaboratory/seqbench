@@ -25,7 +25,7 @@ Useful links:
 Authors:
 \itemize{
   \item André Leite \email{leite@castlab.org} (\href{https://orcid.org/0000-0002-4718-9766}{ORCID})
-  \item Raydonal Ospina \email{raydonal@castlab.org}
+  \item Raydonal Ospina \email{raydonal@castlab.org} (\href{https://orcid.org/0000-0002-9884-9090}{ORCID})
   \item Cristiano Ferraz \email{cferraz@castlab.org} (\href{https://orcid.org/0000-0002-6838-6734}{ORCID})
 }
 

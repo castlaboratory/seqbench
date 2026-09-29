@@ -6,24 +6,27 @@
 \alias{seqbench-package}
 \title{seqbench: Anytime-Valid Sequential Benchmarking of Algorithms}
 \description{
+\if{html}{\figure{logo.svg}{options: style='float: right' alt='logo' width='120'}}
+
 Sequential, anytime-valid comparison of algorithms on paired losses with a practical-equivalence margin. Confidence sequences for the mean paired difference, superiority/equivalence/continue decisions, cost accounting and auditable trajectories.
 }
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://castlaboratory.github.io/seqbench/}
   \item \url{https://github.com/castlaboratory/seqbench}
   \item Report bugs at \url{https://github.com/castlaboratory/seqbench/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: André Leite \email{leite@castlab.org}
+\strong{Maintainer}: André Leite \email{leite@castlab.org} (\href{https://orcid.org/0000-0002-4718-9766}{ORCID})
 
 Authors:
 \itemize{
-  \item André Leite \email{leite@castlab.org}
+  \item André Leite \email{leite@castlab.org} (\href{https://orcid.org/0000-0002-4718-9766}{ORCID})
   \item Raydonal Ospina \email{raydonal@castlab.org}
-  \item Cristiano Ferraz \email{cferraz@castlab.org}
+  \item Cristiano Ferraz \email{cferraz@castlab.org} (\href{https://orcid.org/0000-0002-6838-6734}{ORCID})
 }
 
 }

@@ -2,9 +2,11 @@ Package: seqbench
 Title: Anytime-Valid Sequential Benchmarking of Algorithms
 Version: 0.1.0
 Authors@R: c(
-    person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre")),
+    person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-4718-9766")),
     person("Raydonal", "Ospina", , "raydonal@castlab.org", role = "aut"),
-    person("Cristiano", "Ferraz", , "cferraz@castlab.org", role = "aut")
+    person("Cristiano", "Ferraz", , "cferraz@castlab.org", role = "aut",
+           comment = c(ORCID = "0000-0002-6838-6734"))
     )
 Description: Sequential, anytime-valid comparison of algorithms on paired
     losses with a practical-equivalence margin. Confidence sequences for

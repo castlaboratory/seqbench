@@ -3,10 +3,12 @@
 ## Authors
 
 - **[André Leite](https://castlab.org)**. Author, maintainer.
+  [](https://orcid.org/0000-0002-4718-9766)
 
 - **[Raydonal Ospina](https://castlab.org)**. Author.
 
 - **[Cristiano Ferraz](https://castlab.org)**. Author.
+  [](https://orcid.org/0000-0002-6838-6734)
 
 ## Citation
 

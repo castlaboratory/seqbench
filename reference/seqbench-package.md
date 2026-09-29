@@ -9,6 +9,8 @@ and auditable trajectories.
 
 Useful links:
 
+- <https://castlaboratory.github.io/seqbench/>
+
 - <https://github.com/castlaboratory/seqbench>
 
 - Report bugs at <https://github.com/castlaboratory/seqbench/issues>
@@ -16,11 +18,14 @@ Useful links:
 ## Author
 
 **Maintainer**: André Leite <leite@castlab.org>
+([ORCID](https://orcid.org/0000-0002-4718-9766))
 
 Authors:
 
 - André Leite <leite@castlab.org>
+  ([ORCID](https://orcid.org/0000-0002-4718-9766))
 
 - Raydonal Ospina <raydonal@castlab.org>
 
 - Cristiano Ferraz <cferraz@castlab.org>
+  ([ORCID](https://orcid.org/0000-0002-6838-6734))

@@ -62,7 +62,7 @@ the package site: <https://castlaboratory.github.io/seqbench/>.
 
 ``` r
 
-install.packages("seqbench")            # CRAN, once released
+install.packages("seqbench")            # CRAN
 
 # development version
 # install.packages("pak")

@@ -14,7 +14,7 @@
 ## Citation
 
 Source:
-[`inst/CITATION`](https://github.com/castlaboratory/seqbench/blob/v0.1.0/inst/CITATION)
+[`inst/CITATION`](https://github.com/castlaboratory/seqbench/blob/main/inst/CITATION)
 
 Leite, A., Ospina, R., & Ferraz, C. (2026). seqbench: Anytime-Valid
 Sequential Benchmarking of Algorithms. R package version 0.1.0.

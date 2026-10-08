@@ -2,6 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/castlaboratory/seqbench/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/seqbench)](https://CRAN.R-project.org/package=seqbench)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
@@ -64,7 +65,7 @@ Full reference, the getting-started vignette and the changelog are on the packag
 ## Installation
 
 ```r
-install.packages("seqbench")            # CRAN, once released
+install.packages("seqbench")            # CRAN
 
 # development version
 # install.packages("pak")

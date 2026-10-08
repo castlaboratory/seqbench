@@ -26,11 +26,21 @@ Meta/
 # pkgdown site (rebuilt by CI)
 docs/
 
-# The article and the experiments live in castlaboratory/seqbench-paper; anything left
-# here from the former monorepo layout is ignored.
-experiments/
-paper/
-dev/
+# Companion article (paper/rjournal) and experiments: outputs are large and archived
+# elsewhere; render artefacts are rebuilt by rmarkdown::render().
+experiments/out/
+paper/rjournal/*.log
+paper/rjournal/*.aux
+paper/rjournal/*.out
+paper/rjournal/*.bbl
+paper/rjournal/*.blg
+paper/rjournal/seqbench_files/
+paper/rjournal/RJwrapper.*
+paper/rjournal/seqbench.tex
+paper/rjournal/seqbench.knit.md
+paper/rjournal/seqbench.R
+paper/rjournal/initial_checks.log
+paper/rjournal/*.zip
 
 # Local-only material: Claude Code context, individual plan, working memory,
 # bibliography PDFs. A fresh clone does not have these.

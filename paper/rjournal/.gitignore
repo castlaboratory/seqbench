@@ -1,0 +1,7 @@
+*.log
+*.tex
+RJwrapper*
+*_files/
+initial_checks.log
+seqbench.R
+*.zip

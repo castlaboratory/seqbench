@@ -62,6 +62,14 @@ silently converted.
 Full reference, the getting-started vignette and the changelog are on the package site:
 <https://castlaboratory.github.io/seqbench/>.
 
+## Companion article and experiments
+
+The article *seqbench: Anytime-Valid Sequential Benchmarking of Algorithms in R*
+(submitted to The R Journal) lives in `paper/rjournal/` of this repository, and the
+simulation study and applications it reports in `experiments/` (frozen configurations,
+runner, analysis scripts; results are archived separately). Neither directory is part of
+the R package sources.
+
 ## Installation
 
 ```r

@@ -1,0 +1,22 @@
+---
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+---
+
+\today
+
+Dear Editors of The R Journal,
+
+We submit the article *seqbench: Anytime-Valid Sequential Benchmarking of Algorithms in R* for consideration as a contributed research article.
+
+The article presents `seqbench`, an R package that turns the comparison of two algorithms on a benchmark into a pre-registered sequential experiment. Benchmarks in optimisation, machine learning and computational statistics are run and inspected sequentially, with adaptive budgets and early stopping, and fixed-sample tests lose their guarantees under that use. The package maintains a confidence sequence for the mean paired difference of losses that stays valid under optional stopping, adds a pre-registered margin of practical equivalence with a three-way decision rule that inherits the error control, accounts for cost and treats inconclusive outcomes as first-class results, and reports a full contract of what was assumed and consumed.
+
+We believe the article fits The R Journal for three reasons. First, the package addresses a recurrent statistical failure in computational research with a tidyverse-native, tested and documented implementation; no package on CRAN offers this protocol. Second, the article contains a simulation study with 2,000 replications per cell, frozen before results were available, that measures the validity and cost of the package's boundaries against fixed-sample tests, an invalid repeatedly inspected test and the anytime-valid Gaussian confidence sequence of `safestats`. Third, we report the cost of distribution-free validity honestly: the Gaussian sequence with a known variance needs substantially fewer instances, and the article explains the mechanism and what a user can do about it.
+
+Version 0.1.0 of the package is available from CRAN (https://CRAN.R-project.org/package=seqbench), and its documentation is at https://castlaboratory.github.io/seqbench/. The package has unit tests that check output values, documented examples for every user-facing function, a vignette with the full workflow and continuous integration on macOS, Windows and Linux. All experiment configurations, runner and analysis scripts are in the `experiments/` directory of the package repository (`castlaboratory/seqbench`, outside the package sources), the article source is in `paper/rjournal/` of the same repository, every table in the article is produced from archived results, and the data and scripts that rebuild the tables are included with this submission.
+
+Sincerely,
+
+André Leite, Raydonal Ospina and Cristiano Ferraz
+CAST Lab, Universidade Federal de Pernambuco, and Universidade Federal da Bahia

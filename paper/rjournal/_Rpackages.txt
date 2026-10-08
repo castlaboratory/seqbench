@@ -1,0 +1,5 @@
+seqbench
+knitr
+kableExtra
+rmarkdown
+rjtools

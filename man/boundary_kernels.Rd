@@ -14,7 +14,8 @@ boundary_init(
   theta = 0.5,
   grid = 1001L,
   refine = TRUE,
-  sd_max01 = NULL
+  sd_max01 = NULL,
+  track = NULL
 )
 
 boundary_update(state, x)
@@ -48,6 +49,13 @@ is a supermartingale for every predictable \code{lambda >= 0} (Bennett's
 inequality), and the same holds for \code{-(X - mu)}. Coverage is guaranteed
 only if the declared bound is true.}
 
+\item{track}{Optional numeric vector of points in \verb{[0, 1]} at which the
+betting boundary keeps the exact hedged log-capital, updated in O(1) per
+observation. \code{\link[=update_comparison]{update_comparison()}} tracks the two decision thresholds, so
+that whether a threshold belongs to the confidence set is known exactly at
+every step without searching the capital; read it with
+\code{betting_track_excluded()} (internal). Ignored by the other boundaries.}
+
 \item{state}{A boundary state returned by \code{boundary_init()} or
 \code{boundary_update()}.}
 
@@ -57,10 +65,12 @@ only if the declared bound is true.}
 \verb{[0, 1]} scale. When given to \code{boundary_interval()} for the betting
 boundary, an endpoint is refined only if its grid cell contains one of
 them, which is the only case in which refinement can change a decision;
-this keeps the per-step cost linear in the grid size instead of linear in
-the number of observations. Decisions and stopping times are identical to
-full refinement; the reported running intersection can be up to one grid
-cell wider per side. \code{NULL} (default) refines both endpoints.}
+\code{numeric(0)} disables refinement. \code{NULL} (default) refines both endpoints.
+Refinement evaluates the exact capital, which costs time linear in the
+number of observations; \code{\link[=update_comparison]{update_comparison()}} therefore takes its
+decisions from the capital tracked at the thresholds (see \code{track}), never
+refines during a stream, and refines both endpoints once per call for
+reporting.}
 }
 \value{
 \code{boundary_init()} and \code{boundary_update()} return a state object of

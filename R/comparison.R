@@ -21,16 +21,21 @@
 #' state
 initialize_comparison <- function(design) {
   assert_design(design)
+  rng <- design$diff_bounds[2] - design$diff_bounds[1]
   bnd <- boundary_init(design$boundary, alpha = design$alpha,
                        c = design$betting$c, theta = design$betting$theta,
                        grid = design$betting$grid,
-                       sd_max01 = if (!is.null(design$sd_max)) design$sd_max / (design$diff_bounds[2] - design$diff_bounds[1]) else NULL)
+                       sd_max01 = if (!is.null(design$sd_max)) design$sd_max / rng else NULL,
+                       track = 0.5 + c(-1, 1) * design$margin / rng)
   structure(list(
     design = design,
     boundary_state = bnd,
     data = empty_data(),
     trajectory = empty_trajectory(),
     running = c(lower = 0, upper = 1),       # running intersection on [0, 1]
+    # Betting only: side of the running set relative to each decision threshold
+    # once the exact capital has excluded it ("below" / "above"), else NA.
+    sides = c(lo = NA_character_, hi = NA_character_),
     cost = 0,
     decision = "continue",
     stopping_reason = NA_character_,
@@ -96,6 +101,11 @@ update_comparison <- function(state, losses) {
   a <- design$diff_bounds[1]
   rng <- design$diff_bounds[2] - a
   margin01 <- design$margin / rng
+  thr01 <- c(lo = 0.5 - margin01, hi = 0.5 + margin01)
+  # Betting: decisions use the exact capital at the two thresholds (tracked in O(1)
+  # per instance); states created before 0.1.1 fall back to lazy refinement.
+  exact_thr <- design$boundary == "betting" && length(state$boundary_state$track_m) == 2L
+  if (is.null(state$sides)) state$sides <- c(lo = NA_character_, hi = NA_character_)
 
   order_inst <- unique(losses$instance)
   groups <- split(seq_len(nrow(losses)), factor(losses$instance, levels = order_inst))
@@ -117,7 +127,9 @@ update_comparison <- function(state, losses) {
     cost <- sum(cs)
 
     state$boundary_state <- boundary_update(state$boundary_state, x)
-    ci <- boundary_interval(state$boundary_state, thresholds = c(0.5 - margin01, 0.5 + margin01))
+    ci <- boundary_interval(state$boundary_state,
+                            thresholds = if (exact_thr) numeric(0) else unname(thr01))
+    if (exact_thr) state$sides <- update_sides(state$sides, state$boundary_state, ci, thr01)
     if (design$valid) {
       state$running <- c(lower = max(state$running[["lower"]], ci[["lower"]]),
                          upper = min(state$running[["upper"]], ci[["upper"]]))
@@ -127,6 +139,7 @@ update_comparison <- function(state, losses) {
     if (anyNA(ci[c("lower", "upper")])) {
       state$running <- c(lower = NA_real_, upper = NA_real_)
     }
+    if (exact_thr) state$running <- clamp_sides(state$running, state$sides, thr01)
     state$cost <- state$cost + cost
     state$diagnostics$n_instances <- t
     state$diagnostics$n_evaluations <- state$diagnostics$n_evaluations + length(idx)
@@ -135,7 +148,8 @@ update_comparison <- function(state, losses) {
     state$diagnostics$loss_b_at_bounds <- state$diagnostics$loss_b_at_bounds +
       sum(lb == design$bounds[1] | lb == design$bounds[2])
 
-    dec <- decide(state$running, margin01, state$cost, t, design)
+    dec <- decide(state$running, margin01, state$cost, t, design,
+                  sides = if (exact_thr) state$sides)
     state$decision <- dec$decision
     state$stopping_reason <- dec$reason
     state$stopped <- dec$decision != "continue"
@@ -168,13 +182,15 @@ update_comparison <- function(state, losses) {
     if (!anyNA(ci[c("lower", "upper")]) && !anyNA(state$running)) {
       state$running <- c(lower = max(state$running[["lower"]], ci[["lower"]]),
                          upper = min(state$running[["upper"]], ci[["upper"]]))
+      if (exact_thr) state$running <- clamp_sides(state$running, state$sides, thr01)
       acc$lower[k] <- a + rng * ci[["lower"]]; acc$upper[k] <- a + rng * ci[["upper"]]
       acc$lower_running[k] <- a + rng * state$running[["lower"]]
       acc$upper_running[k] <- a + rng * state$running[["upper"]]
       # The refined intersection can only be narrower: re-evaluate the decision so
       # that state and trajectory stay consistent (in particular an empty set).
       if (!state$stopped) {
-        dec <- decide(state$running, margin01, state$cost, acc$t[k], design)
+        dec <- decide(state$running, margin01, state$cost, acc$t[k], design,
+                      sides = if (exact_thr) state$sides)
         state$decision <- dec$decision; state$stopping_reason <- dec$reason
         state$stopped <- dec$decision != "continue"
         if (identical(dec$reason, "cs_empty")) state$diagnostics$cs_empty <- TRUE
@@ -194,18 +210,58 @@ update_comparison <- function(state, losses) {
   state
 }
 
-# Decision rules on the [0, 1] scale (paper/theory.md, Algorithm 1).
-decide <- function(running, margin01, cost, t, design) {
+# Decision rules on the [0, 1] scale (Section 3.2 of the companion article).
+# With `sides` (betting), a threshold counts as outside the running set exactly
+# when its capital has reached 1/alpha at some time; the side is fixed then,
+# because every later set is contained in the one that excluded it. Since the
+# sets are intervals, this is the rule of the article applied to the exact
+# running intersection, independent of the grid.
+decide <- function(running, margin01, cost, t, design, sides = NULL) {
   L <- running[["lower"]]; U <- running[["upper"]]
   lo_thr <- 0.5 - margin01           # -delta on the [0, 1] scale (mu = 0 maps to 1/2)
   hi_thr <- 0.5 + margin01
   if (anyNA(c(L, U)) || U < L) return(list(decision = "inconclusive", reason = "cs_empty"))
-  if (U < lo_thr) return(list(decision = "A", reason = "declaration"))
-  if (L > hi_thr) return(list(decision = "B", reason = "declaration"))
-  if (L >= lo_thr && U <= hi_thr) return(list(decision = "equivalent", reason = "declaration"))
+  if (!is.null(sides)) {
+    lo <- sides[["lo"]]; hi <- sides[["hi"]]
+    if (identical(lo, "below") && identical(hi, "above"))
+      return(list(decision = "inconclusive", reason = "cs_empty"))
+    if (identical(lo, "below")) return(list(decision = "A", reason = "declaration"))
+    if (identical(hi, "above")) return(list(decision = "B", reason = "declaration"))
+    if (identical(lo, "above") && identical(hi, "below"))
+      return(list(decision = "equivalent", reason = "declaration"))
+  } else {
+    if (U < lo_thr) return(list(decision = "A", reason = "declaration"))
+    if (L > hi_thr) return(list(decision = "B", reason = "declaration"))
+    if (L >= lo_thr && U <= hi_thr) return(list(decision = "equivalent", reason = "declaration"))
+  }
   if (cost >= design$budget) return(list(decision = "inconclusive", reason = "budget"))
   if (t >= design$n_max) return(list(decision = "inconclusive", reason = "n_max"))
   list(decision = "continue", reason = NA_character_)
+}
+
+# Record, for each threshold newly excluded by the exact capital, on which side of
+# it the current betting set lies. `ci[["estimate"]]` is the grid (or exact)
+# minimiser of the capital, a point of B_t whenever B_t is nonempty.
+update_sides <- function(sides, bstate, ci, thr01) {
+  if (anyNA(ci[c("lower", "upper")])) return(sides)
+  excl <- betting_track_excluded(bstate)
+  w <- ci[["estimate"]]
+  for (j in 1:2) {
+    if (is.na(sides[[j]]) && excl[j] && w != thr01[[j]]) {
+      sides[[j]] <- if (w > thr01[[j]]) "above" else "below"
+    }
+  }
+  sides
+}
+
+# The running set lies on the recorded side of each excluded threshold.
+clamp_sides <- function(running, sides, thr01) {
+  if (anyNA(running)) return(running)
+  for (j in 1:2) {
+    if (identical(sides[[j]], "above")) running[["lower"]] <- max(running[["lower"]], thr01[[j]])
+    if (identical(sides[[j]], "below")) running[["upper"]] <- min(running[["upper"]], thr01[[j]])
+  }
+  running
 }
 
 #' Current decision of a comparison

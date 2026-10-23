@@ -61,10 +61,18 @@ seqbench_boundaries <- function() {
 #'   `[0, 1]` scale. When given to `boundary_interval()` for the betting
 #'   boundary, an endpoint is refined only if its grid cell contains one of
 #'   them, which is the only case in which refinement can change a decision;
-#'   this keeps the per-step cost linear in the grid size instead of linear in
-#'   the number of observations. Decisions and stopping times are identical to
-#'   full refinement; the reported running intersection can be up to one grid
-#'   cell wider per side. `NULL` (default) refines both endpoints.
+#'   `numeric(0)` disables refinement. `NULL` (default) refines both endpoints.
+#'   Refinement evaluates the exact capital, which costs time linear in the
+#'   number of observations; [update_comparison()] therefore takes its
+#'   decisions from the capital tracked at the thresholds (see `track`), never
+#'   refines during a stream, and refines both endpoints once per call for
+#'   reporting.
+#' @param track Optional numeric vector of points in `[0, 1]` at which the
+#'   betting boundary keeps the exact hedged log-capital, updated in O(1) per
+#'   observation. [update_comparison()] tracks the two decision thresholds, so
+#'   that whether a threshold belongs to the confidence set is known exactly at
+#'   every step without searching the capital; read it with
+#'   `betting_track_excluded()` (internal). Ignored by the other boundaries.
 #' @param state A boundary state returned by `boundary_init()` or
 #'   `boundary_update()`.
 #' @param x A single number in `[0, 1]`.
@@ -87,7 +95,8 @@ NULL
 #' @rdname boundary_kernels
 #' @export
 boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
-                          theta = 0.5, grid = 1001L, refine = TRUE, sd_max01 = NULL) {
+                          theta = 0.5, grid = 1001L, refine = TRUE, sd_max01 = NULL,
+                          track = NULL) {
   name <- rlang::arg_match(name)
   check_prob(alpha)
   check_prob(c)
@@ -105,6 +114,9 @@ boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
       cli::cli_abort("{.arg sd_max01} must be a single number in (0, 1/2] for the {.val bernstein_declared} boundary.")
     }
   }
+  if (!is.null(track) && (!is.numeric(track) || anyNA(track) || any(track < 0 | track > 1))) {
+    cli::cli_abort("{.arg track} must be NULL or a numeric vector in [0, 1].")
+  }
   base <- list(name = name, alpha = alpha, t = 0L, sum_x = 0, sum_sq_dev = 0,
                valid = name != "naive_fixed")
   st <- switch(name,
@@ -115,6 +127,8 @@ boundary_init <- function(name = seqbench_boundaries(), alpha = 0.05, c = 0.5,
       c = c, theta = theta, refine = isTRUE(refine),
       m = seq(0, 1, length.out = as.integer(grid)),
       log_k_plus = numeric(grid), log_k_minus = numeric(grid),
+      track_m = as.numeric(track), log_track_plus = numeric(length(track)),
+      log_track_minus = numeric(length(track)),
       x_hist = numeric(0), lam_hist = numeric(0))),
     naive_fixed = c(base, list(sum_x2 = 0))
   )
@@ -209,7 +223,19 @@ boundary_update.seqbench_boundary_betting <- function(state, x) {
   inc <- betting_log_increment(x, lam, st$m, st$c)
   st$log_k_plus <- st$log_k_plus + inc$plus
   st$log_k_minus <- st$log_k_minus + inc$minus
+  if (length(st$track_m)) {
+    inc <- betting_log_increment(x, lam, st$track_m, st$c)
+    st$log_track_plus <- st$log_track_plus + inc$plus
+    st$log_track_minus <- st$log_track_minus + inc$minus
+  }
   push_running(st, x)
+}
+
+# Exact exclusion of the tracked points from the current betting set B_t: TRUE
+# where the hedged capital has reached 1/alpha.
+betting_track_excluded <- function(st) {
+  log_k <- pmax(log(st$theta) + st$log_track_plus, log(1 - st$theta) + st$log_track_minus)
+  log_k >= log(1 / st$alpha)
 }
 
 #' @export
@@ -229,13 +255,22 @@ betting_log_increment <- function(x, lam, m, c) {
 }
 
 # Exact log hedged capital log K_t^{+-}(m) for scalar or vector m, from history.
+# Vectorised over m (one t x length(m) block at a time, at most ~2e6 cells).
 betting_log_capital <- function(m, x_hist, lam_hist, c, theta) {
-  vapply(m, function(mm) {
-    lp <- pmin(lam_hist, c / mm)
-    lm <- pmin(lam_hist, c / (1 - mm))
-    dev <- x_hist - mm
-    max(log(theta) + sum(log1p(lp * dev)), log(1 - theta) + sum(log1p(-lm * dev)))
-  }, numeric(1))
+  n <- length(x_hist)
+  if (n == 0L) return(rep(max(log(theta), log(1 - theta)), length(m)))
+  block <- max(1L, floor(2e6 / n))
+  out <- numeric(length(m))
+  for (s in seq(1L, length(m), by = block)) {
+    j <- s:min(length(m), s + block - 1L)
+    M <- matrix(m[j], nrow = n, ncol = length(j), byrow = TRUE)
+    dev <- x_hist - M
+    lp <- pmin(lam_hist, c / M)
+    lm <- pmin(lam_hist, c / (1 - M))
+    out[j] <- pmax(log(theta) + colSums(log1p(lp * dev)),
+                   log(1 - theta) + colSums(log1p(-lm * dev)))
+  }
+  out
 }
 
 #' @rdname boundary_kernels
@@ -309,17 +344,26 @@ boundary_interval.seqbench_boundary_betting <- function(state, thresholds = NULL
   c(estimate = est, lower = lower, upper = upper)
 }
 
-# Bisection for the crossing of f (log capital - threshold) between a and b,
-# where f(a) >= 0 > f(b) ("lower") or f(a) < 0 <= f(b) ("upper"). Returns a point
-# on the OUTSIDE of the crossing so that the reported interval still contains B_t.
-bisect_root <- function(f, a, b, want, iter = 24L) {
-  if (b - a < 1e-12) return(if (want == "lower") a else b)
+# Locate the crossing of f (log capital - threshold, vectorised in m) between a
+# and b, where f(a) >= 0 > f(b) ("lower") or f(a) < 0 <= f(b) ("upper"), by
+# successive vectorised sub-grids of `k` cells (3 rounds of 64 shrink a cell of
+# 1/1000 below 4e-9). Since B_t is an interval, the crossing is unique; the
+# point returned is on the OUTSIDE of it, so the reported interval contains B_t.
+bisect_root <- function(f, a, b, want, rounds = 3L, k = 64L) {
   lo <- a; hi <- b
-  for (i in seq_len(iter)) {
-    mid <- (lo + hi) / 2
-    if (want == "lower") { if (f(mid) < 0) hi <- mid else lo <- mid }
-    else                 { if (f(mid) < 0) lo <- mid else hi <- mid }
-    if (hi - lo < 1e-9) break
+  for (r in seq_len(rounds)) {
+    if (hi - lo < 1e-12) break
+    pts <- seq(lo, hi, length.out = k + 1L)
+    inside <- f(pts) < 0
+    if (want == "lower") {
+      j <- which(inside)[1]                # first accepted point; crossing in (pts[j-1], pts[j]]
+      if (is.na(j) || j == 1L) break       # numerical edge: keep the current bracket
+      lo <- pts[j - 1L]; hi <- pts[j]
+    } else {
+      j <- utils::tail(which(inside), 1L)  # last accepted point; crossing in [pts[j], pts[j+1])
+      if (!length(j) || j == length(pts)) break
+      lo <- pts[j]; hi <- pts[j + 1L]
+    }
   }
   if (want == "lower") lo else hi
 }

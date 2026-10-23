@@ -83,6 +83,10 @@ comparison_design <- function(alpha = 0.05, margin, bounds, boundary = "betting"
   }
   check_prob(betting_c)
   check_prob(betting_theta)
+  if (!is.numeric(betting_grid) || length(betting_grid) != 1L || is.na(betting_grid) ||
+      !is.finite(betting_grid) || betting_grid < 11 || betting_grid != round(betting_grid)) {
+    cli::cli_abort("{.arg betting_grid} must be a single whole number >= 11, not {.val {betting_grid}}.")
+  }
   range <- bounds[2] - bounds[1]
   if (boundary == "bernstein_declared") {
     if (is.null(sd_max)) {
@@ -134,11 +138,13 @@ print.seqbench_design <- function(x, ...) {
 #' * `sd = NULL` (default): the **guaranteed** horizon
 #'   `t*(Delta) = min{t : 2 w_t < |Delta|}` of the predictable-plug-in
 #'   Hoeffding boundary, whose half-width `w_t` is deterministic. On the
-#'   coverage event (probability at least `1 - alpha`) the Hoeffding comparison
-#'   has stopped with the correct declaration by then (theory note, Prop. 2).
-#'   It is distribution-free and, for small margins, very conservative: it can
-#'   exceed what the default betting boundary needs by two or three orders of
-#'   magnitude.
+#'   coverage event (probability at least `1 - alpha`) a comparison run with
+#'   `boundary = "hoeffding"` has stopped with the correct declaration by then
+#'   (Section 3.3 of the companion article). The guarantee is distribution-free
+#'   but holds for the Hoeffding boundary only, and for small margins it is very
+#'   conservative: at `margin = 0.02` and `distance = 0.02` on bounds `[0, 1]`
+#'   it returns about 458,000 instances where the betting boundary stopped after
+#'   a median of 400 to 500 in the package's simulation study.
 #' * `sd` given (standard deviation of the paired difference, loss units): an
 #'   **approximation** that plugs `sd` into the empirical-Bernstein half-width
 #'   in place of the running variance estimate. It is not a bound; it is the
@@ -146,10 +152,12 @@ print.seqbench_design <- function(x, ...) {
 #'   boundary is usually faster still. Use a pilot or a conservative guess for
 #'   `sd`.
 #'
-#' Both charge the full half-width twice (worst-case position of the centre);
-#' typical stopping times are about half of the returned value, as measured in
-#' the package's pilot study. Both are computable before any data are collected
-#' and serve to size `budget` and `n_max`.
+#' Both charge the full half-width twice (worst-case position of the centre).
+#' In the package's simulation study the median stopping time of the
+#' empirical-Bernstein boundary was about one half, and that of the betting
+#' boundary about one quarter, of the value returned with `sd`. Both are
+#' computable before any data are collected and serve to size `budget` and
+#' `n_max`.
 #'
 #' @param design A [comparison_design()].
 #' @param distance Positive distance `|mu| - margin` (superiority) or

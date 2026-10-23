@@ -1,6 +1,6 @@
 Package: seqbench
 Title: Anytime-Valid Sequential Benchmarking of Algorithms
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("André", "Leite", , "leite@castlab.org", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-4718-9766")),
@@ -18,7 +18,6 @@ URL: https://castlaboratory.github.io/seqbench/, https://github.com/castlaborato
 BugReports: https://github.com/castlaboratory/seqbench/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 8.0.0
 Depends:
     R (>= 4.1)
 Imports:
@@ -35,3 +34,4 @@ Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.1

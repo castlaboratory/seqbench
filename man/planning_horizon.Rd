@@ -30,11 +30,13 @@ modes:
 \item \code{sd = NULL} (default): the \strong{guaranteed} horizon
 \verb{t*(Delta) = min\{t : 2 w_t < |Delta|\}} of the predictable-plug-in
 Hoeffding boundary, whose half-width \code{w_t} is deterministic. On the
-coverage event (probability at least \code{1 - alpha}) the Hoeffding comparison
-has stopped with the correct declaration by then (theory note, Prop. 2).
-It is distribution-free and, for small margins, very conservative: it can
-exceed what the default betting boundary needs by two or three orders of
-magnitude.
+coverage event (probability at least \code{1 - alpha}) a comparison run with
+\code{boundary = "hoeffding"} has stopped with the correct declaration by then
+(Section 3.3 of the companion article). The guarantee is distribution-free
+but holds for the Hoeffding boundary only, and for small margins it is very
+conservative: at \code{margin = 0.02} and \code{distance = 0.02} on bounds \verb{[0, 1]}
+it returns about 458,000 instances where the betting boundary stopped after
+a median of 400 to 500 in the package's simulation study.
 \item \code{sd} given (standard deviation of the paired difference, loss units): an
 \strong{approximation} that plugs \code{sd} into the empirical-Bernstein half-width
 in place of the running variance estimate. It is not a bound; it is the
@@ -43,10 +45,12 @@ boundary is usually faster still. Use a pilot or a conservative guess for
 \code{sd}.
 }
 
-Both charge the full half-width twice (worst-case position of the centre);
-typical stopping times are about half of the returned value, as measured in
-the package's pilot study. Both are computable before any data are collected
-and serve to size \code{budget} and \code{n_max}.
+Both charge the full half-width twice (worst-case position of the centre).
+In the package's simulation study the median stopping time of the
+empirical-Bernstein boundary was about one half, and that of the betting
+boundary about one quarter, of the value returned with \code{sd}. Both are
+computable before any data are collected and serve to size \code{budget} and
+\code{n_max}.
 }
 \examples{
 design <- comparison_design(margin = 0.02, bounds = c(0, 1))

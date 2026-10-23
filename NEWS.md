@@ -1,3 +1,27 @@
+# seqbench 0.1.1
+
+* Betting boundary: decisions are now taken from the exact hedged capital at the two
+  decision thresholds, updated in O(1) per instance (`boundary_init(track = )`), instead of
+  bisecting the capital over the whole history whenever an endpoint was near a threshold.
+  The per-instance cost no longer grows with the length of the stream: a stream of 8,000
+  instances at the margin went from 78 s to about 6 s on the same machine. Decisions and
+  stopping times are unchanged (identical in 600 checked streams); reported running
+  intervals can be up to one grid cell wider per side between calls, and both endpoints
+  are still refined once per `update_comparison()` call. States saved with 0.1.0 keep
+  working through the previous code path.
+* Endpoint refinement of the betting boundary evaluates the exact capital on vectorised
+  sub-grids instead of scalar bisection.
+* `comparison_design()` validates `betting_grid` (previously checked only when the
+  comparison was initialised).
+* `comparison_report()` states assumption A2 as in the article: the number and the values
+  of an instance's seeds are fixed without looking at any of its losses.
+* `planning_horizon()` documentation: the Hoeffding horizon is guaranteed for the Hoeffding
+  boundary only and can exceed what betting needs by three orders of magnitude; the
+  "about half" rule of thumb applies to the `sd` mode (about one half for empirical
+  Bernstein, one quarter for betting).
+* New vignettes: "Planning a comparison and choosing a boundary" and "Seeds, clusters and
+  refusals"; case studies on vehicle routing and epidemic control on the package site.
+
 # seqbench 0.1.0
 
 First CRAN release. Development history (0.0.0.9000 to 0.0.0.9002) is kept below.

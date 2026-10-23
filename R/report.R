@@ -65,7 +65,7 @@ comparison_report <- function(state) {
     valid = d$valid,
     assumptions = c(
       A1 = "instances are i.i.d. draws from the population P",
-      A2 = "the number of seeds per instance is fixed before its losses are observed",
+      A2 = "the number and values of the seeds of an instance are fixed without looking at any of its losses",
       A3 = sprintf("both losses lie in [%s, %s]", d$bounds[1], d$bounds[2]),
       A4 = "no instance is reused after its losses are observed",
       if (!is.null(d$sd_max)) c(A5 = sprintf("the standard deviation of the per-instance paired difference is at most %s (declared; coverage holds only if true)", d$sd_max))),

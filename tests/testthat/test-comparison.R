@@ -186,3 +186,55 @@ test_that("infinite costs are rejected", {
   bad <- make_losses(3, 0.1); bad$cost <- c(1, Inf, 1)
   expect_error(update_comparison(st, bad), "finite")
 })
+
+test_that("betting decisions use the exact capital at the thresholds", {
+  d <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1))
+  st <- initialize_comparison(d)
+  expect_equal(st$boundary_state$track_m, c(0.49, 0.51))
+  st <- suppressWarnings(update_comparison(st, make_losses(800, shift = -0.06, sd = 0.1, seed = 5)))
+  expect_identical(dec(st), "B")
+  bs <- st$boundary_state
+  # tracked capital equals the capital recomputed from the history
+  exact <- seqbench:::betting_log_capital(bs$track_m, bs$x_hist, bs$lam_hist, bs$c, bs$theta)
+  tracked <- pmax(log(bs$theta) + bs$log_track_plus, log(1 - bs$theta) + bs$log_track_minus)
+  expect_equal(tracked, exact, tolerance = 1e-10)
+  expect_identical(unname(st$sides[["hi"]]), "above")
+  # the declaration happened at the first time the upper threshold left the set
+  t_stop <- nrow(st$trajectory)
+  b2 <- boundary_init("betting", alpha = 0.05, track = 0.51)
+  x01 <- (st$data$loss_a - st$data$loss_b + 1) / 2
+  first <- NA
+  for (i in seq_along(x01)) {
+    b2 <- boundary_update(b2, x01[i])
+    if (seqbench:::betting_track_excluded(b2)) { first <- i; break }
+  }
+  expect_identical(first, t_stop)
+})
+
+test_that("states created without tracked thresholds fall back to lazy refinement", {
+  d <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1), n_max = 1500)
+  l <- make_losses(1500, shift = 0.06, sd = 0.1, seed = 160)
+  new <- suppressWarnings(update_comparison(initialize_comparison(d), l))
+  old <- initialize_comparison(d)
+  old$boundary_state$track_m <- NULL; old$sides <- NULL       # shape of a 0.1.0 state
+  old <- suppressWarnings(update_comparison(old, l))
+  expect_identical(dec(old), dec(new))
+  expect_identical(nrow(old$trajectory), nrow(new$trajectory))
+})
+
+test_that("betting_grid is validated when the design is created", {
+  expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), betting_grid = 5), "betting_grid")
+  expect_error(comparison_design(margin = 0.02, bounds = c(0, 1), betting_grid = 100.5), "betting_grid")
+})
+
+test_that("the betting update cost does not grow with the length of the stream", {
+  skip_on_cran()
+  d <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1), n_max = Inf)
+  run <- function(n) {
+    set.seed(1); la <- runif(n, .4, .6)
+    l <- data.frame(instance = seq_len(n), loss_a = la, loss_b = la - 0.02 + runif(n, -.05, .05))
+    system.time(update_comparison(initialize_comparison(d), l))[["elapsed"]]
+  }
+  t1 <- run(1000); t4 <- run(4000)
+  expect_lt(t4 / max(t1, 0.05), 8)       # linear growth is 4x; quadratic would be 16x
+})

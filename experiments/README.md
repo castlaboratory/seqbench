@@ -43,12 +43,18 @@ and `T8_cluster_v2.csv`):
 | `audit_coverage_2026-09-26.R` | no-stopping coverage audit (`audit:*`) on the 24 main cells | 24 × 3 × 2000 |
 | `csweep_2026-09-27.R` | betting cap `c ∈ {0.75, 0.9, 0.99}` and `bernstein_declared` at 1×, 2×, 0.5× the true sd on the 12 baseline cells | 12 × 6 × 2000 |
 
-Paper (ii) studies frozen on 2026-09-28 (launched the same day: `sigma_grid` and `cluster_icc`
-on cast, `robust` split — non-safestats methods on cast, `savi_cs*` on the Mac with
-`SEQBENCH_METHODS="^savi"`; the two halves are merged by copying `cells/` and rerunning the runner):
+Applications frozen on 2026-10-23 (analysis: `analysis/apps_summary.R`, writes
+`paper/rjournal/data/T9_apps_pool.csv` to `T12_apps_models.csv` and `F3_apps_live.csv`).
+Each first builds a frozen pool of i.i.d. instances, then resamples streams from it, so the
+truth of the resampling population (the pool mean) is known exactly:
+
+```sh
+Rscript experiments/run/make_pool.R experiments/configs/app_cvrp_2026-10-23.R 4       # pool
+Rscript experiments/run/run_study.R experiments/configs/app_cvrp_2026-10-23.R 4       # streams
+Rscript experiments/analysis/apps_summary.R
+```
 
 | Config | What | Cells × reps |
 |---|---|---|
-| `robust_2026-09-28.R` | skewed (Beta, skew 0 / 1.2 / 1.9) and tied (p0 ∈ {0, 0.4, 0.7}) paired differences on [0, 1]; betting c 0.5 and 0.9, EB, fixed 2000, `savi_cs` (oracle sd) and `savi_cs:pilot` | 18 × 6 × 2000 |
-| `sigma_grid_2026-09-28.R` | six sd levels (0.01 to 0.15) × μ ∈ {0, 0.05, 0.10} for the two-regime approximation; betting c 0.5 / 0.9, EB, `bernstein_declared:sd1` | 18 × 4 × 2000 |
-| `cluster_icc_2026-09-28.R` | seed clusters with strong differential effect (w = 0.15, ICC 0.41, design effect 2.7): correct analysis vs pseudoreplication | 2 × 2 × 2000 |
+| `app_cvrp_2026-10-23.R` | sweep + 2-opt vs Clarke-Wright savings + 2-opt on random CVRP instances (50-150 customers); loss = relative gap to max(MST, radial bound), in [0, 1) by construction; margin 0.01 | 1 × 5 × 1000, pool 10,000 |
+| `app_epidemic_2026-10-23.R` | acquaintance vs degree-targeted vaccination, SIR final size by bond percolation on five network models; loss = attack rate; margin 0.01; 5 seeds per network and the 1-seed design, plus invalid pseudoreplication | 2 × 6 × 1000, pool 10,000 × 5 seeds |

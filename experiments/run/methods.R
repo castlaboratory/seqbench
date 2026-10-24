@@ -144,15 +144,23 @@ run_savi <- function(losses, cfg, mu_true, truth, method, p = NULL, opts = chara
                                                  alternative = "twoSided", testType = "oneSample",
                                                  eType = "mom", nSim = 100L, seed = 1, pb = FALSE)
   }
-  res <- safestats::saviTTest(d, designObj = .savi_cache[[key]], sequential = TRUE, wantCi = TRUE)
-  cs <- res$confSeqMatrix
-  L <- cummax(ifelse(is.na(cs[, 1]), -Inf, cs[, 1])); U <- cummin(ifelse(is.na(cs[, 2]), Inf, cs[, 2]))
-  decs <- vapply(seq_along(d), function(t) three_way(L[t], U[t], cfg$margin), character(1))
-  stop_t <- which(decs != "continue")
-  t <- if (length(stop_t)) stop_t[1] else length(d)
+  # The confidence set at time t uses only the first t observations, so the stream is passed
+  # in prefixes of doubling length until a decision (added 2026-10-23: identical results,
+  # checked numerically, at a fraction of the cost of the full stream).
+  n_try <- min(200L, length(d))
+  repeat {
+    res <- safestats::saviTTest(d[seq_len(n_try)], designObj = .savi_cache[[key]], sequential = TRUE, wantCi = TRUE)
+    cs <- res$confSeqMatrix
+    L <- cummax(ifelse(is.na(cs[, 1]), -Inf, cs[, 1])); U <- cummin(ifelse(is.na(cs[, 2]), Inf, cs[, 2]))
+    decs <- vapply(seq_len(n_try), function(t) three_way(L[t], U[t], cfg$margin), character(1))
+    stop_t <- which(decs != "continue")
+    if (length(stop_t) || n_try == length(d)) break
+    n_try <- min(2L * n_try, length(d))
+  }
+  t <- if (length(stop_t)) stop_t[1] else n_try
   dec <- if (length(stop_t)) decs[t] else "inconclusive"
   miscover <- if (is.na(mu_true)) NA else any(L[seq_len(t)] > mu_true | U[seq_len(t)] < mu_true)
-  ev <- res$eValueVec; ev[is.na(ev)] <- 0        # NaN e-values when the first differences all tie (sd 0)
+  ev <- res$eValueVec; ev[is.na(ev)] <- 0        # NaN e-values when the first differences all tie (sd 0); evaluated prefix only
   e_reject <- any(ev >= 1 / cfg$alpha)
   cost <- sum(losses$cost[losses$instance %in% unique(losses$instance)[seq_len(t)]])
   result_row(method, dec, if (dec == "inconclusive") "budget" else "declaration", t, cost, miscover, L[t], U[t], truth,

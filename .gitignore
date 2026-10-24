@@ -42,9 +42,8 @@ paper/rjournal/seqbench.R
 paper/rjournal/initial_checks.log
 paper/rjournal/*.zip
 
-# Local-only material: Claude Code context, individual plan, working memory,
+# Local-only material: individual plan, working memory,
 # bibliography PDFs. A fresh clone does not have these.
-CLAUDE.md
 PLANO.md
 memory/
 references/

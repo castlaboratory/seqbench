@@ -24,6 +24,8 @@ validate_paired_losses <- function(losses, design, seen_instances,
   if (!"cost" %in% names(losses)) losses$cost <- design$cost_per_round
 
   for (col in c("loss_a", "loss_b", "cost")) {
+    # a column of bare NAs is logical; report it as missing, not as non-numeric
+    if (is.logical(losses[[col]]) && all(is.na(losses[[col]]))) losses[[col]] <- as.numeric(losses[[col]])
     if (!is.numeric(losses[[col]])) {
       cli::cli_abort("Column {.field {col}} must be numeric.", call = call)
     }

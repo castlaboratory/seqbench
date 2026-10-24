@@ -235,6 +235,12 @@ test_that("the betting update cost does not grow with the length of the stream",
     l <- data.frame(instance = seq_len(n), loss_a = la, loss_b = la - 0.02 + runif(n, -.05, .05))
     system.time(update_comparison(initialize_comparison(d), l))[["elapsed"]]
   }
-  t1 <- run(1000); t4 <- run(4000)
+  t1 <- min(run(1000), run(1000)); t4 <- min(run(4000), run(4000))   # min of two: robust to load
   expect_lt(t4 / max(t1, 0.05), 8)       # linear growth is 4x; quadratic would be 16x
+})
+
+test_that("a column of bare NA is reported as missing, not as non-numeric", {
+  st <- initialize_comparison(design)
+  expect_error(update_comparison(st, data.frame(instance = 1, loss_a = NA, loss_b = 0.5)), "missing value")
+  expect_error(update_comparison(st, data.frame(instance = 1, loss_a = "a", loss_b = 0.5)), "numeric")
 })

@@ -30,7 +30,11 @@ export(seqbench_boundaries)
 export(stopping_decision)
 export(tidy)
 export(update_comparison)
-importFrom(generics,glance)
-importFrom(generics,tidy)
-importFrom(rlang,"%||%")
-importFrom(rlang,.data)
+importFrom(generics,
+  glance,
+  tidy
+)
+importFrom(rlang,
+  "%||%",
+  .data
+)

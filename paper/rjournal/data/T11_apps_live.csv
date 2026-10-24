@@ -1,0 +1,7 @@
+"app","seeds","boundary","n_instances","n_evaluations","cpu_seconds","estimate","lower","upper","decision","reason"
+"cvrp",1,"betting",189,189,6.114,0.05,0.0101599121093749,0.0871240386962893,"B","declaration"
+"cvrp",1,"empirical_bernstein",334,334,10.381,0.05470742420426,0.0100397257038856,0.0989924460227538,"B","declaration"
+"epidemic",5,"betting",62,310,3.558,0.144,0.0153293457031252,0.24,"B","declaration"
+"epidemic",5,"empirical_bernstein",115,575,6.248,0.142558751461414,0.0111413159308433,0.273976186991985,"B","declaration"
+"epidemic",1,"betting",60,60,0.780000000000001,0.144,0.0101118469238282,0.242,"B","declaration"
+"epidemic",1,"empirical_bernstein",113,113,1.293,0.145764796575464,0.0113387710535027,0.279878335866901,"B","declaration"

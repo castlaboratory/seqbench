@@ -25,9 +25,11 @@ model_rows <- list(); pool_rows <- list(); run_rows <- list(); live_rows <- list
 for (app in names(apps)) {
   cfg <- source(file.path("experiments/configs", paste0(apps[[app]], ".R")))$value
   P <- readRDS(cfg$pool_file)
-  cells <- if ("seeds" %in% names(cfg$dgp)) cfg$dgp$seeds else 1L
+  has_seeds <- "seeds" %in% names(cfg$dgp)       # epidemic: seed = 1..5; cvrp: seed is the instance's RNG seed
+  cells <- if (has_seeds) cfg$dgp$seeds else 1L
+  P$seed_index <- if (has_seeds) P$seed else 1L
   for (m in unique(cells)) {
-    Pm <- P[P$seed <= m, ]
+    Pm <- P[P$seed_index <= m, ]
     d_inst <- tapply(Pm$loss_a - Pm$loss_b, Pm$instance, mean)
     icc <- NA_real_; deff <- NA_real_
     if (m > 1) {                                  # one-way ANOVA estimator on the row differences
@@ -43,7 +45,7 @@ for (app in names(apps)) {
       cpu_per_instance = mean(tapply(Pm$cost, Pm$instance, sum)))
   }
   grp <- intersect(c("model", "placement"), names(P))[1]       # instance type, one seed
-  P1 <- P[P$seed == min(P$seed), ]
+  P1 <- P[P$seed_index == 1L, ]
   for (lv in sort(unique(P1[[grp]]))) {
     d1 <- P1[P1[[grp]] == lv, ]
     model_rows[[length(model_rows) + 1L]] <- data.frame(app = app, model = lv, instances = nrow(d1),
@@ -69,7 +71,7 @@ for (app in names(apps)) {
   }
   # Live run: the pool in generation order (fresh i.i.d. instances), betting and EB
   for (m in unique(cells)) {
-    Pm <- P[P$seed <= m, ]; Pm <- Pm[order(Pm$instance, Pm$seed), ]
+    Pm <- P[P$seed_index <= m, ]; Pm <- Pm[order(Pm$instance, Pm$seed_index), ]
     Pm <- Pm[Pm$instance <= cfg$n_max, ]
     for (b in c("betting", "empirical_bernstein")) {
       des <- comparison_design(alpha = cfg$alpha, margin = cfg$margin, bounds = cfg$bounds,

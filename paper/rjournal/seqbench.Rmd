@@ -1,30 +1,37 @@
 ---
 title: "seqbench: Anytime-Valid Sequential Benchmarking of Algorithms in R"
-date: "2026-10-08"
+date: "2026-10-23"
 abstract: >
-  Comparing two algorithms on a benchmark is a sequential experiment: results are inspected as instances are run, budgets are adapted and the comparison stops when it looks settled, and fixed-sample tests lose their guarantees under this use. seqbench treats the comparison as a sequential experiment on paired losses and maintains a confidence sequence for the mean paired difference that remains valid under optional stopping, together with a pre-registered margin of practical equivalence. It issues one of three declarations, continues, or ends inconclusively when the budget is exhausted; all declarations share one error level. We describe the protocol, the package's result contract and refusals, and a simulation study with 2,000 replications per cell against fixed-sample tests, an invalid repeatedly inspected test and the anytime-valid Gaussian confidence sequence of safestats. The distribution-free boundaries never exceeded 0.45% false declarations; the repeatedly inspected t-test reached 38%; the Gaussian sequence with a known variance needed 1.4 to 20 times fewer instances, a cost the package makes visible. Three applications show the workflow.
+  Algorithm comparisons are run as sequential experiments: results are inspected as instances are solved, budgets are adapted and the study stops when the outcome looks settled. Fixed-sample tests lose their guarantees under this use. The \pkg{seqbench} package maintains a confidence sequence for the mean paired difference of losses, valid at data-dependent stopping times, and reads it against a pre-registered margin of practical equivalence. It declares one algorithm relevantly better, the two equivalent, or the comparison inconclusive within its budget, all at one error level. In a simulation study with 2,000 replications per cell, the distribution-free boundaries never exceeded 0.45% false declarations, while a repeatedly inspected t-test reached 38%; a Gaussian confidence sequence given the true variance needed 1.4 to 21 times fewer instances. Applications to vehicle routing heuristics, vaccination strategies on contact networks and community detection show the workflow and its costs.
 draft: false
 author:
   - name: André Leite
-    affiliation: CAST Lab, Universidade Federal de Pernambuco
+    affiliation: Universidade Federal de Pernambuco
     address:
-    - Departamento de Estatística
-    - Recife, Brazil
+    - CAST Lab, Departamento de Estatística, Centro de Ciências Exatas e da Natureza
+    - Recife, PE, Brazil
     url: https://castlab.org
+    orcid: 0000-0002-4718-9766
     email: leite@castlab.org
   - name: Raydonal Ospina
     affiliation: Universidade Federal da Bahia
     address:
-    - Departamento de Estatística
-    - Salvador, Brazil
+    - Departamento de Estatística, Instituto de Matemática e Estatística
+    - Salvador, BA, Brazil
+    affiliation2: Universidade Federal de Pernambuco
+    address2:
+    - CAST Lab, Departamento de Estatística, Centro de Ciências Exatas e da Natureza
+    - Recife, PE, Brazil
     url: https://castlab.org
+    orcid: 0000-0002-9884-9090
     email: raydonal@castlab.org
   - name: Cristiano Ferraz
-    affiliation: CAST Lab, Universidade Federal de Pernambuco
+    affiliation: Universidade Federal de Pernambuco
     address:
-    - Departamento de Estatística
-    - Recife, Brazil
+    - CAST Lab, Departamento de Estatística, Centro de Ciências Exatas e da Natureza
+    - Recife, PE, Brazil
     url: https://castlab.org
+    orcid: 0000-0002-6838-6734
     email: cferraz@castlab.org
 type: package
 output:
@@ -34,168 +41,216 @@ output:
 bibliography: seqbench.bib
 ---
 
+```{=latex}
+\renewcommand{\thesection}{\arabic{section}}
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 library(seqbench)
+library(ggplot2)
+# Every number reported below is read from the archived summary tables in data/,
+# written by the analysis scripts in experiments/analysis/ of the package repository.
+t1 <- read.csv("data/T1_validity.csv")
+t2 <- read.csv("data/T2_cost.csv")
+t3 <- read.csv("data/T3_ablations.csv")
+t4 <- read.csv("data/T4_regimes.csv")
+t7 <- read.csv("data/T7_extra.csv")
+t8 <- read.csv("data/T8_cluster_v2.csv")
+a9 <- read.csv("data/T9_apps_pool.csv")
+a10 <- read.csv("data/T10_apps_runs.csv")
+a11 <- read.csv("data/T11_apps_live.csv")
+f3 <- read.csv("data/F3_apps_live.csv")
+a12 <- read.csv("data/T12_apps_models.csv")
+a12 <- a12[a12$app == "epidemic", ]
+a12$label <- c(er = "Erdős--Rényi", ba = "Barabási--Albert", ws = "Watts--Strogatz",
+               sbm = "block-model", powerlaw = "power-law")[a12$model]
+pct <- function(x, d = 1) paste0(formatC(100 * x, format = "f", digits = d), "%")
+num <- function(x, d = 0) formatC(x, format = "f", digits = d, big.mark = ",")
+mx <- function(m, col = "false_rate") max(t1[t1$method == m, col])
+base <- t2[t2$ablation == "none", ]
+sv <- base[base$method == "savi_cs" & base$mu != 0.02, ]
+nf <- t1[t1$method == "seqbench:naive_fixed" & t1$ablation == "none" & t1$h > 0.1, ]
+app <- function(a, m, s = 1L) a10[a10$app == a & a10$method == m & a10$seeds == s, ]
+pool <- function(a, s = 1L) a9[a9$app == a & a9$seeds == s, ]
+live <- function(a, b = "betting", s = 1L) a11[a11$app == a & a11$boundary == b & a11$seeds == s, ]
 ```
-
 
 # Introduction {#sec-intro}
 
-Algorithm comparisons in optimisation, machine learning and computational statistics are
-rarely fixed-sample experiments. Instances are run in batches; intermediate results are
-inspected; more seeds are added where the outcome looks close; the study stops when one
-method "clearly" dominates or when the budget runs out. Every one of these habits invalidates
-a fixed-sample test: inspecting a $t$-test after each instance and stopping at the first
-rejection inflates the type-I error without bound (@armitage1969), and
-the simulation study in Section 5 measures it at 38% for a nominal 5% in one of our
-scenarios. The problem is old and well understood in clinical trials; the benchmarking
-literature mostly ignores it. Best-practice guides recommend statistical tests
-(@bartz2020; @eimer2025) but not sequential ones; racing methods
-used in algorithm configuration (@birattari2002; @lopezibanez2016) inspect
-repeatedly by design and explicitly disclaim error control.
+Algorithm comparisons in optimisation, machine learning, operations research and
+computational statistics are rarely fixed-sample experiments. Instances are run in batches;
+intermediate results are inspected; more instances are added where the outcome looks close;
+the study stops when one method "clearly" dominates or when the budget runs out. Each of these
+habits invalidates a fixed-sample test. Inspecting a $t$-test after every instance and stopping
+at the first rejection inflates the type-I error without bound [@armitage1969]; the simulation
+study of [Section 5](#sec-sim) measures `r pct(mx("seqbench:naive_fixed"), 0)` false declarations at
+a nominal 5% in one of its scenarios. The problem is old and well understood in clinical
+trials, but the benchmarking literature mostly ignores it. Best-practice guides recommend
+statistical tests [@bartz2020; @eimer2025] but not sequential ones, and the racing methods used
+in algorithm configuration [@birattari2002; @lopezibanez2016] inspect repeatedly by design
+without controlling the error of the final comparison.
 
-The statistical tool that fixes this is the confidence sequence (@howard2021; @ramdas2023): a sequence of intervals $C_t$ with
-$P(\forall t: \mu \in C_t) \ge 1-\alpha$, valid at every data-dependent stopping time.
-@waudbysmith2024 give tight confidence sequences for the mean of bounded
-random variables by betting; @choe2024 apply confidence sequences to the
-paired comparison of two forecasters; the R packages \CRANpkg{safestats} [@safestats; @ly2024] and
-\CRANpkg{seqcomp} [@seqcomp] implement sequential $t$-tests and forecast comparisons respectively.
+The statistical tool that repairs this is the confidence sequence [@howard2021; @ramdas2023]:
+a sequence of sets $C_t$ with $P(\forall t \ge 1: \mu \in C_t) \ge 1-\alpha$, which remains
+valid at every data-dependent stopping time. @waudbysmith2024 give tight confidence sequences
+for the mean of bounded random variables by betting; @choe2024 use confidence sequences to
+compare two forecasters; @arnold2026 build sequential model confidence sets. In R,
+\CRANpkg{safestats} [@safestats; @ly2024] implements anytime-valid $t$-tests and their
+confidence sequences, and \CRANpkg{seqcomp} [@seqcomp] compares probabilistic forecasts
+sequentially.
 
-`seqbench` packages this machinery into a *protocol for algorithm benchmarking*. Its
-contributions are practical, not methodological: an explicit population estimand for the
-comparison, pairing by instance with seeds treated as a cluster, a pre-registered margin
-of practical equivalence turned into a three-way decision rule that inherits the error
-control of the confidence sequence, cost accounting with an inconclusive outcome that is
-never converted into a decision, and a result contract that reports what was assumed and
-what was consumed. We are explicit about what this does *not* buy: the error control is a
-margin rule applied to an existing confidence sequence, and, as Section 5 shows, the
-distribution-free boundaries pay a substantial price in instances relative to a Gaussian
-sequence that knows the variance. The package makes that price visible instead of hiding
-it.
+\CRANpkg{seqbench} packages this machinery into a *protocol for benchmarking two algorithms*.
+Its contributions are practical rather than methodological: an explicit population estimand;
+pairing by instance with seeds treated as a cluster; a pre-registered margin of practical
+equivalence turned into a three-way decision rule that inherits the error control of the
+confidence sequence; cost accounting, with an inconclusive outcome that is never converted
+into a decision; and a result contract that reports what was assumed and what was consumed.
+We are explicit about what this does not buy. The error control is a margin rule applied to an
+existing confidence sequence, and, as [Section 5](#sec-sim) shows, the distribution-free
+boundaries pay a substantial price in instances relative to a Gaussian sequence that knows the
+variance. The package makes that price visible.
 
-Section 2 states the problem and the assumptions; Section 3 the protocol and its guarantee; Section 4 the package; Section 5 the simulation study; Section 6 three applications; Section 7 discusses limitations and the road ahead.
+[Section 2](#sec-setting) states the problem and its assumptions, [Section 3](#sec-protocol)
+the protocol and its guarantee, [Section 4](#sec-package) the package, [Section
+5](#sec-sim) the simulation study and [Section 6](#sec-apps) three applications.
+[Section 7](#sec-uses) discusses where the protocol applies, and [Section
+8](#sec-limitations) its limitations.
 
 # The comparison as a sequential experiment {#sec-setting}
 
 ## Estimand
 
-Let $P$ be a population of problem instances and $S$ a distribution of seeds (random
-restarts, initialisations, resampling). Running algorithm $k \in \{A, B\}$ on instance $i$
-with seed $s$ yields a loss $L_k(i, s)$, smaller being better; the loss is the user's
-choice and the package does not interpret it. The paired difference is
-$D(i, s) = L_A(i, s) - L_B(i, s)$ and the estimand is the population mean
+Let $P$ be a population of problem instances and $S$ a distribution of seeds (random restarts,
+initialisations, stochastic replications). Running algorithm $k \in \{A, B\}$ on instance $i$
+with seed $s$ yields a loss $L_k(i, s)$, smaller being better; the loss is the user's choice
+and the package does not interpret it. The paired difference is
+$D(i, s) = L_A(i, s) - L_B(i, s)$, and the estimand is the population mean
 
 $$\mu = E_{i \sim P}\big[E_{s \sim S}[D(i, s)]\big].$$
 
-A negative $\mu$ favours A. This is what "A is better than B on problems like these"
-means. It is *not* the mean over a fixed benchmark set (a finite-population target, for
-which sequential inference would sample without replacement), nor a probability of
-winning; both are legitimate targets and neither is the one addressed here.
+A negative $\mu$ favours A. This is what "A is better than B on problems like these" means. It
+is not the mean over a fixed benchmark suite, a finite-population target for which sequential
+inference would sample without replacement [@waudbysmith2020], nor a probability of winning;
+both are legitimate targets and neither is addressed here.
 
 ## Practical relevance
 
 A margin $\delta > 0$, in loss units, is fixed before any data are seen and partitions the
-parameter space into three hypotheses that cover the line (Table \@ref(tab:tab1)).
+parameter space into three hypotheses that cover the real line (Table \@ref(tab:tab1)).
 
 ```{r tab1}
-tab <- as.data.frame(rbind(
-  c("$H_A$", "$\\mu < -\\delta$", "A is relevantly better"),
-  c("$H_0$", "$|\\mu| \\le \\delta$", "practically equivalent"),
-  c("$H_B$", "$\\mu > \\delta$", "B is relevantly better")
-), stringsAsFactors = FALSE)
-names(tab) <- c("Hypothesis", "Condition", "Reading")
-knitr::kable(tab, caption = "The three hypotheses defined by the margin.", escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
+tab <- data.frame(
+  Hypothesis = c("$H_A$", "$H_0$", "$H_B$"),
+  Condition = c("$\\mu < -\\delta$", "$|\\mu| \\le \\delta$", "$\\mu > \\delta$"),
+  Reading = c("A is relevantly better", "practically equivalent", "B is relevantly better"))
+knitr::kable(tab, caption = "The three hypotheses defined by the margin.", escape = FALSE,
+             row.names = FALSE, booktabs = TRUE) |>
   kableExtra::kable_styling(latex_options = "hold_position")
 ```
 
+The margin is a domain decision (one percentage point of accuracy, one percentage point of
+optimality gap, one percentage point of a population infected), recorded with the design and
+never tuned after inspection. This is the reading of a confidence interval used by
+equivalence testing [@schuirmann1987; @lakens2017] and by Bayesian regions of practical
+equivalence [@benavoli2017], made anytime-valid.
 
-The margin is a domain decision (one percentage point of accuracy, 0.1 points of
-optimality gap, one modularity point), recorded with the design and never tuned after
-inspection. This is the reading of a confidence interval used by equivalence testing
-[@schuirmann1987; @lakens2017] and by Bayesian regions of practical equivalence
-[@benavoli2017], made anytime-valid.
+## Assumptions {#sec-assumptions}
 
-## Assumptions
-
-- **(A1) Independent instances.** Instances are drawn i.i.d. from $P$.
-- **(A2) Seeds fixed by design.** The number of seeds for an instance and their values
-  are chosen without looking at any loss of that instance; seeds are drawn from $S$.
-- **(A3) Bounded losses.** Both losses lie in a known interval $[\ell_{lo}, \ell_{hi}]$,
-  so $D \in [a, b] = [\ell_{lo} - \ell_{hi}, \ell_{hi} - \ell_{lo}]$.
-- **(A4) No adaptive reuse.** A draw whose losses were observed does not receive new seeds
+- **(A1) Independent instances.** Instances are drawn independently from $P$, and the order in
+  which they are run does not depend on their losses.
+- **(A2) Seeds fixed by design.** The number of seeds of an instance and their values are
+  chosen without looking at any loss of that instance; seeds are drawn from $S$.
+- **(A3) Bounded losses.** Both losses lie in a known interval $[\ell_{lo}, \ell_{hi}]$, so
+  $D \in [a, b] = [\ell_{lo} - \ell_{hi}, \ell_{hi} - \ell_{lo}]$.
+- **(A4) No adaptive reuse.** An instance whose losses were observed does not receive new seeds
   and does not reappear.
 
-Under (A1)–(A3) the per-instance seed-averaged difference, rescaled to
-$X_t = (\bar D_{i_t} - a)/(b - a) \in [0, 1]$, satisfies $E[X_t \mid \mathcal F_{t-1}] = \nu$
-with $\nu = 1/2 + \mu/(b-a)$, which is what the confidence sequences below require;
-the $X_t$ need not be identically distributed (the seed count may vary), and arbitrary
-dependence between the two algorithms and across seeds of the same instance is allowed.
-(A4) is what makes (A2) enforceable: adding seeds to an instance after seeing its losses
-makes $X_t$ depend on past outcomes. The sequential unit is therefore the instance, not the
-evaluation.
+Let $\bar D_t$ be the seed-averaged difference of the $t$-th instance and
+$X_t = (\bar D_t - a)/(b - a) \in [0, 1]$. Under (A1)--(A4),
+$E[X_t \mid \mathcal F_{t-1}] = \nu = 1/2 + \mu/(b-a)$ for every $t$, where
+$\mathcal F_{t-1}$ contains everything observed before instance $t$: the instance is a fresh
+draw from $P$ (A1), and given the instance its seeds are fresh draws from $S$ whose number may
+depend on the past but not on the instance's own losses (A2). This conditional-mean condition
+is all the confidence sequences below require. The $X_t$ need not be identically distributed
+(the number of seeds may vary), and arbitrary dependence between the two algorithms, and across
+the seeds of an instance, is allowed. (A4) is what makes (A2) enforceable: adding seeds to an
+instance after seeing its losses makes $X_t$ depend on its own outcome. The sequential unit is
+therefore the instance, not the evaluation.
 
-Timeouts and failed runs are handled before the data reach the package: a penalised
-outcome [PAR-$k$: the cutoff time times $k$ for unfinished runs, @hutter2009] keeps
-the loss bounded and changes the estimand to the mean penalised loss; censoring would keep
-the estimand and break boundedness. The package takes the first route and records the
-choice as the user's.
+Timeouts and failed runs must be resolved before the data reach the package. A penalised
+outcome [PAR-$k$, the cutoff time times $k$ for unfinished runs, @hutter2009] keeps the loss
+bounded and changes the estimand to the mean penalised loss; censoring keeps the estimand and
+breaks boundedness. The package takes the first route and records the choice as the user's.
+Truncating an unbounded loss at a cutoff is the same kind of choice, and it also changes the
+estimand. Where a bound holds by construction, as for the relative gap to a lower bound or an
+attack rate ([Section 6](#sec-apps)), no such choice is needed.
 
 # The protocol and its guarantee {#sec-protocol}
 
 ## Confidence sequences for bounded means
 
-On the $[0, 1]$ scale the package offers three confidence sequences from @waudbysmith2024, all with the time-uniform guarantee under the conditional-mean condition
-above: the predictable-plug-in Hoeffding sequence (a deterministic width, distribution-free
-and very conservative), the predictable-plug-in empirical-Bernstein sequence (variance
-adaptive) and the hedged betting sequence (the default, the tightest of the three). A fourth
-option, `"naive_fixed"`, is the fixed-sample $t$ interval recomputed at every instance; it is
-*not* a confidence sequence, is flagged invalid in every output, and exists only as the
-negative control of Section 5. Since every set of one confidence sequence contains $\nu$ on
-the same event, the running intersection $C_t^\cap = \bigcap_{s \le t} C_s$ is again a
-$1-\alpha$ confidence sequence, and the decision rules use it.
+On the $[0, 1]$ scale the package offers three confidence sequences of @waudbysmith2024, all
+with the time-uniform guarantee under the conditional-mean condition above: the
+predictable-plug-in Hoeffding sequence (deterministic width; distribution-free and very
+conservative), the predictable-plug-in empirical-Bernstein sequence (variance-adaptive) and the
+hedged betting sequence (the default and the tightest of the three). A fourth valid option,
+`"bernstein_declared"`, is a predictable-plug-in Bennett sequence that takes a declared upper
+bound on the standard deviation of the paired difference; its coverage holds only if the
+declaration is true, and the declaration is recorded in the result as a fifth assumption. A
+last option, `"naive_fixed"`, is the fixed-sample $t$ interval recomputed after every instance.
+It is *not* a confidence sequence, is flagged invalid in every output, and exists only as the
+negative control of [Section 5](#sec-sim). Because every set of one confidence sequence
+contains $\nu$ on the same event, the running intersection $C_t^\cap = \bigcap_{s \le t} C_s$
+is again a $1-\alpha$ confidence sequence, and the decision rule uses it.
 
-## Decision rule
+## Decision rule {#sec-rule}
 
-With $C_t^\cap = [L_t, U_t]$ mapped back to loss units, checked in this order:
+With $C_t^\cap = [L_t, U_t]$ mapped back to loss units, the rules are checked in this order
+after each instance:
 
-1. inconclusive with reason `cs_empty` if $U_t < L_t$ (possible with probability at most
-   $\alpha$; never a decision);
+1. inconclusive, with reason `cs_empty`, if $C_t^\cap$ is empty (an event of probability at
+   most $\alpha$; never a decision);
 2. A is relevantly better if $U_t < -\delta$;
 3. B is relevantly better if $L_t > \delta$;
 4. practically equivalent if $-\delta \le L_t$ and $U_t \le \delta$;
-5. otherwise continue, unless the budget or the maximum number of instances is exhausted,
-   in which case the outcome is inconclusive with reason `budget` or `n_max`.
+5. otherwise continue, unless the budget or the maximum number of instances is exhausted, in
+   which case the outcome is inconclusive, with reason `budget` or `n_max`.
 
-**Proposition (no false declaration, single $\alpha$).** Let $C_t$ be a $1-\alpha$
-confidence sequence for $\nu$. For every stopping time $\tau$, including budget-driven ones,
-the probability that the procedure ever issues a false declaration, of any of the three
-kinds, is at most $\alpha$.
+**Proposition (no false declaration, one $\alpha$).** Let $(C_t)$ be a $1-\alpha$ confidence
+sequence for $\nu$ and let the procedure stop at the first declaration or at an arbitrary
+stopping time $\tau$, possibly driven by the budget. Then the probability that it issues a
+false declaration, of any of the three kinds, is at most $\alpha$.
 
 *Proof.* On the event $E = \{\forall t: \nu \in C_t\}$, which has probability at least
-$1-\alpha$, $L_t \le \nu \le U_t$ for all $t$; each declaration condition then implies the
-corresponding hypothesis, so every declaration on $E$ is correct, at every $t$ and in
-particular at $\tau$. The three false-declaration events are disjoint and contained in
-$E^c$. $\square$
+$1-\alpha$, $\nu \in C_t^\cap$, hence $L_t \le \nu \le U_t$, for every $t$. Each declaration
+condition then implies the corresponding hypothesis ($U_t < -\delta$ implies $\mu < -\delta$,
+and so on), so every declaration issued on $E$ is correct, whenever it is issued. The event
+of a false declaration is therefore contained in $E^c$. $\square$
 
-The proof is one paragraph because the work is done by the confidence sequence. What the
-protocol adds is the reading: the three declarations are events on one simultaneous
-confidence set, so no split of $\alpha$ is needed (TOST needs none either; it is an
-intersection–union test), and the guarantee holds at the data-dependent time at which a
-benchmarker actually stops. "Inconclusive" carries no error; it is the complement of a
+The proof is one paragraph because the confidence sequence does the work. What the protocol
+adds is the reading: the three declarations are events on one simultaneous confidence set, so
+no split of $\alpha$ is needed (two one-sided tests for equivalence need none either, being an
+intersection--union test), and the guarantee holds at the data-dependent time at which a
+benchmarker actually stops. "Inconclusive" carries no error: it is the complement of a
 declaration, and its probability is a design quantity.
 
-## Planning
+## Planning {#sec-planning}
 
-For the Hoeffding sequence the half-width $w_t$ is deterministic, and on the coverage
-event the correct declaration has been issued by
-$t^*(g) = \min\{t : 2 w_t < g\}$, where $g$ is the distance from $\nu$ to the nearest
-threshold on the $[0,1]$ scale. This is computable before any data are collected from
-$(\alpha, \delta, \text{bounds})$ and a target distance, and it is what
-`planning_horizon()` returns; a variance-based approximation using the empirical-Bernstein
-width with a declared standard deviation is available as well. Both are conservative:
-typical stopping times are one half (Bernstein) to one quarter (betting) of the returned
-value in the regimes of Section 5, whose last part explains why.
+For the Hoeffding sequence the half-width $w_t$ is deterministic. On the coverage event a
+comparison run with that boundary has issued the correct declaration by
+$t^*(g) = \min\{t : 2 w_t < g\}$, where $g$ is the distance from $\nu$ to the nearest threshold
+on the $[0,1]$ scale; $t^*$ depends only on $(\alpha, \delta, \text{bounds})$ and a target
+distance, and `planning_horizon()` returns it. The guarantee is distribution-free but belongs
+to the Hoeffding boundary, and it is very conservative: at $\delta = 0.02$, bounds $[0, 1]$ and
+a distance of 0.02, $t^* =$ `r num(planning_horizon(comparison_design(margin = 0.02, bounds = c(0, 1)), 0.02))`
+instances, against a median of `r num(base$median_n[base$method == "seqbench:betting" & base$mu == 0 & base$h < 0.1])`
+for the betting boundary in the corresponding cell of [Section 5](#sec-sim). Given a planning
+value of the standard deviation of the paired difference, `planning_horizon()` returns instead
+the horizon of the empirical-Bernstein width with that variance plugged in. This is an
+approximation, not a bound. In the regimes of [Section 5](#sec-sim) the median stopping time
+was about one half of it for the empirical-Bernstein boundary and about one quarter for the
+betting boundary; the truncated-bet analysis there explains why.
 
 # The package {#sec-package}
 
@@ -208,9 +263,11 @@ design <- comparison_design(alpha = 0.05, margin = 0.02, bounds = c(0, 1),
                             boundary = "betting", budget = 800)
 state  <- initialize_comparison(design)
 
-losses <- data.frame(instance = 1:50, seed = 1L,
-                     loss_a = runif(50, 0.4, 0.8), loss_b = runif(50, 0.3, 0.7))
-state  <- update_comparison(state, losses)   # one row per (instance, seed)
+# one row per (instance, seed); here A loses 0.05 more than B on average
+la <- runif(400, 0.40, 0.80)
+losses <- data.frame(instance = 1:400, seed = 1L, loss_a = la,
+                     loss_b = la - 0.05 + runif(400, -0.17, 0.17))
+state  <- update_comparison(state, losses)
 stopping_decision(state)
 ```
 
@@ -218,443 +275,659 @@ stopping_decision(state)
 glance(state)
 ```
 
-`update_comparison()` is incremental: rows of new instances can be fed at any time, in any
-batch size; seeds of the same instance are averaged into one observation; the procedure
-stops at the first instance that triggers a declaration and refuses data after that
-(the pre-registered protocol ends there), with a warning listing what was not consumed.
-`comparison_report()` (also `summary()`) returns the full result contract, `tidy()` the
-trajectory (one row per instance with the interval, its running intersection, cost and the
-decision at that time), `glance()` a one-row summary, and `autoplot()` the confidence
-sequence against the number of instances with the equivalence band.
+`update_comparison()` is incremental: rows of new instances can be fed at any time and in any
+batch size, and the seeds of an instance are averaged into one observation. The procedure stops
+at the first instance that triggers a declaration and refuses data after it, because the
+pre-registered protocol ends there; a warning lists what was not consumed (here, the instances
+after the declaration). `comparison_report()` (also `summary()`) returns the result contract,
+`tidy()` the trajectory (one row per instance with the interval, its running intersection, the
+cost and the decision at that time), `glance()` a one-row summary, and `autoplot()` the
+confidence sequence against the number of instances with the equivalence band
+(Figure \@ref(fig:fig-workflow)).
+
+```{r fig-workflow, echo = TRUE, fig.width = 7, fig.height = 3.2, out.width = "100%", fig.cap = "Output of autoplot() for the comparison above: running confidence sequence for the mean paired difference (ribbon), estimate (line) and equivalence band [-0.02, 0.02] (grey). The procedure stops when the whole ribbon is above the band.", fig.alt = "A shaded band that narrows as instances accumulate and ends entirely above the grey equivalence band."}
+ggplot2::autoplot(state)
+```
 
 ## The result contract
 
-Every comparison reports: the estimand (as a sentence), the estimate, the current
-confidence sequence, the boundary and its validity flag, the four assumptions in words, the
-decision and stopping reason, diagnostics (instances, evaluations, losses at the bounds,
-empty-set flag), resources consumed against the budget, the instance and seed identifiers
-in the order observed, and the package and R versions. The intent is that a reader can
-audit a decision without rerunning it.
+Every comparison reports the estimand (as a sentence), the estimate, the current confidence
+sequence, the boundary and its validity flag, the assumptions in words (four, or five with a
+declared variance bound), the decision and stopping reason, diagnostics (instances,
+evaluations, losses at the bounds, an empty-set flag), the resources consumed against the
+budget, the instance and seed identifiers in the order observed, and the package and R
+versions. The intent is that a reader can audit a decision without rerunning it.
 
 ## Refusals
 
 The package never converts invalid input into a valid-looking result. A loss outside the
 declared bounds is an error, not a clipped value; a missing loss is an error, not a dropped
-row; a negative or infinite cost is an error; a duplicated (instance, seed) pair is an
-error; an instance that reappears after its losses were observed is an error with a message
-explaining (A4); `paired = FALSE` is an error saying that unpaired designs are not
-implemented. Updating after a terminal decision is an error too.
+row; a negative or infinite cost is an error; a duplicated (instance, seed) pair is an error;
+an instance that reappears after its losses were observed is an error whose message explains
+(A4); `paired = FALSE` is an error stating that unpaired designs are not implemented; and
+updating after a terminal decision is an error too.
 
-## Implementation notes
+## Implementation notes {#sec-implementation}
 
 Each boundary is a small state machine with sufficient statistics, exposed through three
-kernels that sister packages can reuse: `boundary_init()` creates the state,
-`boundary_update()` absorbs one observation and `boundary_interval()` reads the current
-confidence set. The
-betting boundary keeps the log-capital on a grid of candidate means; its confidence set is
-the set of grid points whose capital is below $1/\alpha$, which @waudbysmith2024 prove
-to be an interval. The package reports the *outer* boundaries of the accepted run (so that
-the reported set contains the exact one) and refines an endpoint by bisection on the exact
-capital only when its grid cell contains a decision threshold, which is the only case in
-which refinement can change a decision; a nonempty set narrower than one grid cell is found
-by minimising the exact capital rather than reported as empty. The per-instance cost is
-linear in the grid size away from thresholds; a stream of 2,000 instances that never
-decides takes 0.3 s.
+kernels that other packages can reuse: `boundary_init()` creates the state, `boundary_update()`
+absorbs one observation and `boundary_interval()` reads the current confidence set. The betting
+boundary keeps the hedged log-capital on a grid of candidate means (1,001 points by default);
+its confidence set is the set of means at which the capital is below $1/\alpha$, which
+@waudbysmith2024 show to be an interval. The package reports the outer edges of the grid cells
+that contain the endpoints, so that the reported set contains the exact one, and refines both
+endpoints on the exact capital once per call of `update_comparison()`; a nonempty set narrower
+than one grid cell is located by minimising the exact capital rather than reported as empty.
+
+Decisions do not depend on the grid. Because the confidence sets are intervals, each rule of
+the decision rule in [Section 3](#sec-protocol) is equivalent to a statement about the two thresholds: B is declared
+when $+\delta$ has left the running set and the set lies above it, and so on. The package
+therefore tracks the exact capital at the two thresholds, which costs $O(1)$ per instance, and
+records on which side of a threshold the set lies when the capital excludes it; every later
+set is contained in that one, so the side never changes. The per-instance cost is linear in
+the grid size and does not grow with the length of the stream. A stream of 8,000 instances
+exactly at the margin, which never decides, takes about 6 s on a 2015-era desktop processor
+(Intel Core i5-6500, R 4.6.1).
 
 # Simulation study {#sec-sim}
 
 ## Design
 
-The study was frozen before results were available (configuration files are dated and
-never edited; changes are new files) and its analysis script was written and tested on a
-three-replication smoke run before the study ran. All code is in `experiments/` of the
-package repository.^[<https://github.com/castlaboratory/seqbench>, outside the R package
-sources.] Losses are generated as $\text{loss}_A = u_i + \eta_{is}$ and
-$\text{loss}_B = u_i' + \eta'_{is} - \mu + e_{is}$ with an instance effect
-$u_i \sim U(0.45, 0.70)$ shared by both algorithms when paired ($u_i' = u_i$) and drawn
-independently otherwise, seed noise $\eta \sim U(-h_{seed}, h_{seed})$ and comparison noise
-$e \sim U(-h, h)$; then $E[\text{loss}_A - \text{loss}_B] = \mu$ exactly, all losses lie in
-$[0.05, 0.90] \subset [0, 1]$, and the standard deviation of the per-instance difference is
-known. The baseline grid crosses $\mu \in \{0, 0.01, 0.02, 0.05, 0.10, 0.20\}$ (null, true
-equivalence, exactly at the margin, moderate, large, very large effects) with
-$\text{sd}(D) \in \{0.03, 0.10\}$, with $\alpha = 0.05$, $\delta = 0.02$, bounds $[0, 1]$
-and a budget of 2,000 instances. Two ablations use the high-noise level: unpaired
-instances, and five seeds per instance with seed noise 0.03. Each of the 24 cells has
-2,000 replications; every method sees the same simulated stream in a given replication
-(seeded by cell and replication only), so method comparisons are paired. Two amendments,
-frozen on 2026-09-26 after an external review and run with the same methods and
-replication count, add 14 cells with negative effects and effects 0.005 and 0.01 away from
-the margin ($\mu \in \{-0.20, -0.05, -0.025, -0.015, 0.015, 0.025, 0.03\}$, both noise
-levels) and 12 seed-cluster cells with an instance-specific differential effect (Section
-5.4). One amended cell ($\mu = -0.20$, high noise) is invalid by construction: its losses
-for B reach 1.07, and the package refused every replication of it rather than clip; it is
-reported as such and excluded, since the other 13 cells cover the negative direction.
+The study was frozen before results were available: configuration files are dated and never
+edited, and changes are new files. Its analysis script was written and tested on a
+three-replication smoke run before the study ran. All code is in the `experiments/` directory
+of the package repository.^[<https://github.com/castlaboratory/seqbench>, outside the R
+package sources.] Losses are generated as $L_A = u_i + \eta_{is}$ and
+$L_B = u_i' + \eta'_{is} - \mu + e_{is}$, with an instance effect $u_i \sim U(0.45, 0.70)$
+shared by both algorithms when paired ($u_i' = u_i$) and drawn independently otherwise, seed
+noise $\eta, \eta' \sim U(-h_{seed}, h_{seed})$ and comparison noise $e \sim U(-h, h)$; then
+$E[L_A - L_B] = \mu$ exactly, all losses lie in $[0.047, 0.903] \subset [0, 1]$, and the
+standard deviation of the per-instance difference is known. The baseline grid crosses
+$\mu \in \{0, 0.01, 0.02, 0.05, 0.10, 0.20\}$ (null, true equivalence, exactly at the margin,
+moderate, large and very large effects) with $\text{sd}(D) \in \{0.03, 0.10\}$, with
+$\alpha = 0.05$, $\delta = 0.02$, bounds $[0, 1]$ and a budget of 2,000 instances. Two
+ablations use the high noise level: unpaired instances, and five seeds per instance with seed
+noise $h_{seed} = 0.03$. Each of the 24 cells has 2,000 replications, and every method sees the
+same simulated stream in a given replication (seeded by cell and replication only), so method
+comparisons are paired.
 
-Eight procedures are compared: the three valid boundaries and the invalid control;
-fixed-sample $t$ intervals at $n = 100$, $500$ and $2{,}000$ instances with the same
-three-way margin rule (no adaptation); and the anytime-valid confidence sequence for the
-mean of `safestats`' sequential $t$-test [`saviTTest`, @safestats; @ly2024] with the same running
-intersection and margin rule, its design fixed before the stream with the *known*
-standard deviation of the data-generating process (an oracle, favourable to `safestats`,
-which assumes Gaussian data while ours are sums of uniforms).
+Two amendments, frozen on 2026-09-26 after an external review and run with the same methods
+and replication count, add 14 cells with negative effects and with effects 0.005 and 0.01 away
+from a threshold ($\mu \in \{-0.20, -0.05, -0.025, -0.015, 0.015, 0.025, 0.03\}$, both noise
+levels), and 12 seed-cluster cells with an instance-specific differential effect
+(see "Pairing and seed clusters" below). One amended cell ($\mu = -0.20$, high noise) is invalid by
+construction: its losses for B reach 1.07, and the package refused every replication rather
+than clip. It is reported as such and excluded; the other 13 cells cover the negative
+direction.
 
-Metrics: false declarations (a declaration that contradicts the truth; at $\mu = \delta$
-the truth is "equivalent"), coverage failure (the true mean leaves the reported running
-intersection at some time up to stopping), inconclusive outcomes, and instances consumed.
-Uncertainty: Wilson intervals for rates; percentile bootstrap over replications for
-medians; paired bootstrap for ratios of medians. With 2,000 replications the Monte Carlo
-standard error of a rate near 0.05 is 0.005; zero observed events give an upper Wilson
-bound of 0.0019.
+Eight procedures are compared: the three distribution-free boundaries and the invalid
+control; fixed-sample $t$ intervals at $n = 100$, $500$ and $2{,}000$ instances with the same
+three-way margin rule and no adaptation; and the anytime-valid confidence sequence of the
+sequential $t$-test of \pkg{safestats} [`saviTTest()`, @safestats; @ly2024] with the same
+running intersection and margin rule. Its design is fixed before the stream with the *true*
+standard deviation of the data-generating process, an oracle that favours \pkg{safestats},
+which assumes Gaussian data while ours are sums of uniforms.
+
+The metrics are false declarations (a declaration that contradicts the truth; at
+$\mu = \delta$ the truth is "equivalent"), coverage failure (the true mean leaves the reported
+running intersection at some time up to stopping), the proportion of inconclusive outcomes,
+and the number of instances consumed. Rates carry Wilson intervals, medians percentile
+bootstrap intervals over replications, and ratios of medians paired bootstrap intervals. With
+2,000 replications the Monte Carlo standard error of a rate near 0.05 is 0.005, and zero
+observed events give an upper Wilson bound of 0.0019.
 
 ## Validity
 
-Table \@ref(tab:tab2) gives, for each procedure, the largest false-declaration rate and the largest
-coverage-failure rate over the 24 cells.
-
+Table \@ref(tab:tab2) gives, for each procedure, the largest false-declaration rate and the
+largest coverage-failure rate over the 24 cells.
 
 ```{r tab2}
-tab <- as.data.frame(rbind(
-  c("betting", "0.0045 ($\\mu = 0.02$, unpaired) [0.0024, 0.0085]", "0.0145"),
-  c("empirical Bernstein", "0.0015 ($\\mu = 0.02$, unpaired) [0.0005, 0.0044]", "0.0025"),
-  c("Hoeffding", "0.0000 [0, 0.0019]", "0.0000"),
-  c("fixed $n = 100$", "0.0310 ($\\mu = 0.02$) [0.0243, 0.0395]", "0.0610"),
-  c("fixed $n = 500$", "0.0270 ($\\mu = 0.02$) [0.0208, 0.0351]", "0.0560"),
-  c("fixed $n = 2000$", "0.0355 ($\\mu = 0.02$, unpaired) [0.0282, 0.0445]", "0.0640"),
-  c("`safestats` CS, oracle sd", "0.0250 ($\\mu = 0.02$) [0.0190, 0.0328]", "0.0495"),
-  c("naive fixed (invalid)", "0.3800 ($\\mu = 0.02$) [0.3590, 0.4015]", "0.6195")
-), stringsAsFactors = FALSE)
-names(tab) <- c("Procedure", "max false declaration", "max coverage failure")
-knitr::kable(tab, caption = "Maximum rates over 24 cells (2,000 replications each), with the cell and the 95\\% Wilson interval of the maximum false-declaration rate.", escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
+lab <- c("seqbench:betting" = "betting", "seqbench:empirical_bernstein" = "empirical Bernstein",
+         "seqbench:hoeffding" = "Hoeffding", "fixed:100" = "fixed $n = 100$",
+         "fixed:500" = "fixed $n = 500$", "fixed:final" = "fixed $n = 2000$",
+         "savi_cs" = "\\pkg{safestats} CS, oracle sd", "seqbench:naive_fixed" = "naive fixed (invalid)")
+abl <- c(none = "", unpaired = ", unpaired", cluster = ", five seeds")
+tab <- do.call(rbind, lapply(names(lab), function(m) {
+  d <- t1[t1$method == m, ]; i <- which.max(d$false_rate)
+  where <- if (d$false_rate[i] > 0) sprintf(" ($\\mu = %s$%s)", d$mu[i], abl[[d$ablation[i]]]) else ""
+  data.frame(Procedure = lab[[m]],
+             fd = sprintf("%.4f%s [%.4f, %.4f]", d$false_rate[i], where, d$false_lo[i], d$false_hi[i]),
+             cov = sprintf("%.4f", max(d$miscover_rate)))
+}))
+names(tab) <- c("Procedure", "max false declaration [95\\% Wilson]", "max coverage failure")
+knitr::kable(tab, caption = "Maximum rates over the 24 cells (2,000 replications each), with the cell of the maximum false-declaration rate and its 95\\% Wilson interval.",
+             escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
   kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
 ```
 
-The three distribution-free boundaries are far inside their nominal level, with their few
-false declarations concentrated at the exact margin, where "equivalent" is the only correct
-answer and a superiority declaration is a legitimate $\alpha$-event. Fixed-sample tests and
-the Gaussian sequence sit at their nominal level. The repeatedly inspected $t$-test issues a
-false declaration in 38% of the runs at the margin, 20% under true equivalence and 17%
-under the null, and its interval fails to cover the truth at some inspection in up to 62%
-of runs: this is the behaviour of a benchmark that peeks. Ten of its 24 cells have a Wilson
-lower bound above $\alpha$.
+The three distribution-free boundaries stay far inside their nominal level. Their few false
+declarations are concentrated at the exact margin, where "equivalent" is the only correct
+answer and a superiority declaration is a legitimate $\alpha$-event. The fixed-sample tests and
+the Gaussian sequence sit near their nominal level. The repeatedly inspected $t$-test issues a
+false declaration in `r pct(nf$false_rate[nf$mu == 0.02], 0)` of the runs at the margin,
+`r pct(nf$false_rate[nf$mu == 0.01], 0)` under true equivalence and
+`r pct(nf$false_rate[nf$mu == 0], 0)` under the null, and its interval misses the truth at
+some inspection in up to `r pct(mx("seqbench:naive_fixed", "miscover_rate"), 0)` of the runs:
+this is the behaviour of a benchmark that peeks. In
+`r sum(t1$method == "seqbench:naive_fixed" & t1$exceeds_alpha)` of its 24 cells the lower
+Wilson bound of the false-declaration rate is above $\alpha$.
 
 ## Cost
 
-
 ```{r tab3}
-t2 <- read.csv("data/T2_cost.csv")
-t2 <- t2[t2$ablation == "none" & t2$h > 0.1, ]
-lab <- c("seqbench:betting" = "betting", "seqbench:empirical_bernstein" = "empirical Bernstein",
-         "seqbench:hoeffding" = "Hoeffding", "fixed:100" = "fixed $n = 100$", "fixed:500" = "fixed $n = 500$",
-         "fixed:final" = "fixed $n = 2000$", "savi_cs" = "\\CRANpkg{safestats} CS, oracle sd",
-         "seqbench:naive_fixed" = "naive fixed (invalid)")
+d <- base[base$h > 0.1, ]
 cell <- function(m, p) ifelse(p >= 0.9, "budget", ifelse(p > 0.005, sprintf("%.0f$^{%.0f\\%%}$", m, 100 * p), sprintf("%.0f", m)))
-w <- reshape(data.frame(method = t2$method, mu = t2$mu, v = cell(t2$median_n, t2$p_inconclusive)),
+w <- reshape(data.frame(method = d$method, mu = d$mu, v = cell(d$median_n, d$p_inconclusive)),
              idvar = "method", timevar = "mu", direction = "wide")
 w <- w[match(names(lab), w$method), ]
 w$method <- lab[w$method]
-names(w) <- c("Procedure", paste0("$\\mu = ", sort(unique(t2$mu)), "$"))
-knitr::kable(w, caption = "Median instances to stopping, baseline cells with $\\text{sd}(D) = 0.10$, 2,000 replications. A superscript gives the percentage of inconclusive runs when above 0.5\\%; ``budget'' marks cells where more than 90\\% of the runs exhausted the 2,000 instances. Bootstrap 95\\% intervals of the medians are within 4\\% of the reported value in every cell.",
+names(w) <- c("Procedure", paste0("$\\mu = ", sort(unique(d$mu)), "$"))
+dd <- d[!d$method %in% c("seqbench:naive_fixed", "seqbench:hoeffding") & !grepl("^fixed", d$method) & d$p_inconclusive < 0.9, ]
+relw <- max(pmax(dd$median_hi / dd$median_n - 1, 1 - dd$median_lo / dd$median_n))
+knitr::kable(w, caption = paste0("Median instances to stopping, baseline cells with $\\text{sd}(D) = 0.10$, 2,000 replications. A superscript gives the percentage of inconclusive runs when above 0.5\\%; ``budget'' marks cells where at least 90\\% of the runs exhausted the 2,000 instances. For the valid sequential procedures the bootstrap 95\\% intervals of the medians are within ", round(100 * relw), "\\% of the reported value."),
              escape = FALSE, row.names = FALSE, booktabs = TRUE, align = c("l", rep("r", 6))) |>
   kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
 ```
 
-Three readings. First, adaptation pays: the betting sequence resolves the null in a median
-of 496 instances and the moderate effect in 272, while a fixed sample of 100 is
-inconclusive 96% of the time under the null and a fixed sample of 500 is inconclusive 40%
-of the time at $\mu = 0.01$. Second, the ordering of the distribution-free boundaries is the
-expected one: empirical Bernstein needs about 1.9 times the instances of betting, and
-Hoeffding resolves only the very large effect within the budget. Third, and this is the
-number a benchmarker should see before choosing: the Gaussian sequence with a known variance
-needs between 0.27 and 0.71 of the instances of the betting sequence in this noise level,
-and between 0.05 and 0.14 in the low-noise level (Table \@ref(tab:tab4)), with paired bootstrap intervals
-of width below 0.03. The end of Section 5 explains the mechanism; Section 7 draws the consequence.
+```{r cost-numbers}
+g <- function(m, mu, h = 0.173, col = "median_n") base[base$method == m & base$mu == mu & abs(base$h - h) < 1e-6, col]
+eb_ratio <- base$ratio_to_betting[base$method == "seqbench:empirical_bernstein" & base$p_inconclusive < 0.5 & base$mu != 0.02]
+sv_hi <- sv[sv$h > 0.1, ]; sv_lo <- sv[sv$h < 0.1, ]
+```
 
+Three readings. First, adaptation pays. The betting sequence resolves the null in a median of
+`r num(g("seqbench:betting", 0))` instances and the moderate effect in
+`r num(g("seqbench:betting", 0.05))`, whereas a fixed sample of 100 is inconclusive in
+`r pct(g("fixed:100", 0, col = "p_inconclusive"), 0)` of the runs under the null and a fixed
+sample of 500 in `r pct(g("fixed:500", 0.01, col = "p_inconclusive"), 0)` at $\mu = 0.01$.
+Second, the distribution-free boundaries are ordered as expected: empirical Bernstein needs
+`r sprintf("%.1f", min(eb_ratio))` to `r sprintf("%.1f", max(eb_ratio))` times the instances of
+betting, and Hoeffding resolves only the very large effect within the budget. Third, and this is
+the number a benchmarker should see before choosing, the Gaussian sequence with a known variance
+needs `r sprintf("%.2f", min(sv_hi$ratio_to_betting))` to `r sprintf("%.2f", max(sv_hi$ratio_to_betting))`
+of the instances of the betting sequence at this noise level and
+`r sprintf("%.2f", min(sv_lo$ratio_to_betting))` to `r sprintf("%.2f", max(sv_lo$ratio_to_betting))`
+at the low noise level (Table \@ref(tab:tab4)), that is, `r sprintf("%.1f", 1 / max(sv$ratio_to_betting))`
+to `r sprintf("%.0f", 1 / min(sv$ratio_to_betting))` times fewer. The truncated-bet analysis below
+explains the mechanism, and [Section 8](#sec-limitations) draws the consequence.
 
 ```{r tab4}
-t2 <- read.csv("data/T2_cost.csv")
-r <- t2[t2$ablation == "none" & t2$method == "savi_cs" & t2$mu != 0.02, ]
-r <- r[order(r$h, r$mu), ]
-cell <- sprintf("%.3f (%.3f--%.3f)", r$ratio_to_betting, r$ratio_lo, r$ratio_hi)
-w <- data.frame(sd = ifelse(r$h < 0.1, "0.03", "0.10"), mu = r$mu, v = cell)
+r <- sv[order(sv$h, sv$mu), ]
+w <- data.frame(sd = ifelse(r$h < 0.1, "0.03", "0.10"), mu = r$mu,
+                v = sprintf("%.3f (%.3f--%.3f)", r$ratio_to_betting, r$ratio_lo, r$ratio_hi))
 w <- reshape(w, idvar = "sd", timevar = "mu", direction = "wide")
 names(w) <- c("$\\text{sd}(D)$", paste0("$\\mu = ", sort(unique(r$mu)), "$"))
-knitr::kable(w, caption = "Ratio of median instances, \\CRANpkg{safestats} CS over betting, with the paired bootstrap 95\\% interval, baseline cells.",
+knitr::kable(w, caption = "Ratio of median instances, \\pkg{safestats} CS over betting, with the paired bootstrap 95\\% interval, baseline cells.",
              escape = FALSE, row.names = FALSE, booktabs = TRUE, align = c("l", rep("r", 5))) |>
   kableExtra::kable_styling(latex_options = c("hold_position", "scale_down"))
 ```
 
-## Pairing and seed clusters
-
+## Pairing and seed clusters {#sec-clusters}
 
 ```{r tab5}
-tab <- as.data.frame(rbind(
-  c("unpaired, instances", "1.46", "1.79", "1.09", "1.01", "1.02"),
-  c("unpaired, evaluations", "1.55", "1.36", "1.15", "1.03", "1.02"),
-  c("five seeds, instances", "0.82", "0.72", "0.94", "0.97", "1.00"),
-  c("five seeds, evaluations", "3.92", "3.36", "4.66", "4.85", "4.95")
-), stringsAsFactors = FALSE)
-names(tab) <- c("Ablation", "$\\mu = 0$", "$0.01$", "$0.05$", "$0.10$", "$0.20$")
-knitr::kable(tab, caption = "Betting boundary, $\\text{sd}(D) = 0.10$: ratio of median instances and of mean evaluations (both algorithms, all seeds) relative to the paired single-seed design.", escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
+t3$lab <- ifelse(t3$ablation == "unpaired", "unpaired", "five seeds")
+t3o <- t3[t3$mu != 0.02, ]
+w <- rbind(
+  data.frame(a = paste(t3o$lab, "instances", sep = ", "), mu = t3o$mu, v = sprintf("%.2f", t3o$ratio_n)),
+  data.frame(a = paste(t3o$lab, "evaluations", sep = ", "), mu = t3o$mu, v = sprintf("%.2f", t3o$ratio_cost)))
+w <- reshape(w, idvar = "a", timevar = "mu", direction = "wide")
+w <- w[order(match(w$a, c("unpaired, instances", "unpaired, evaluations", "five seeds, instances", "five seeds, evaluations"))), ]
+names(w) <- c("Ablation", paste0("$\\mu = ", sort(unique(t3o$mu)), "$"))
+knitr::kable(w, caption = "Betting boundary, $\\text{sd}(D) = 0.10$: ratio of median instances and of mean evaluations (both algorithms, all seeds) relative to the paired single-seed design.",
+             escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
   kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
 ```
 
-Pairing by instance costs nothing and saves up to 44% of the instances in the hard cells
-(and it turns a 47% inconclusive rate at $\mu = 0.01$ into 10%). Averaging five seeds per
-instance saves up to 28% of the *instances* but costs 3.4 to 5 times the *evaluations*: in
+Pairing by instance costs nothing and saves up to `r pct(1 - 1 / max(t3o$ratio_n[t3o$ablation == "unpaired"]), 0)`
+of the instances in the hard cells: at $\mu = 0.01$ it turns
+`r pct(t3$p_inconclusive[t3$ablation == "unpaired" & t3$mu == 0.01], 0)` inconclusive runs into
+`r pct(t3$p_inc_paired[t3$ablation == "unpaired" & t3$mu == 0.01], 0)`. Averaging five seeds
+per instance saves up to `r pct(1 - min(t3o$ratio_n[t3o$ablation == "cluster"]), 0)` of the
+*instances* but costs `r sprintf("%.1f", min(t3o$ratio_cost[t3o$ablation == "cluster"]))` to
+`r sprintf("%.1f", max(t3o$ratio_cost[t3o$ablation == "cluster"]))` times the *evaluations*. In
 this design the instance effect cancels exactly under pairing, so seed averaging only reduces
-independent seed noise, and its benefit is confined to the cells where the variance matters
-at all (see the truncated-bet regime below).
+independent seed noise, and its benefit is confined to the cells where the variance matters at
+all (see the truncated-bet analysis below).
 
-The companion cluster study adds to the paired difference an instance-specific term
-$v_i \sim U(-w, w)$ shared by all seeds of instance $i$, so that within-instance
-differences are positively correlated and row-level analysis is genuinely invalid; with
-$w = 0.05$ the intra-instance correlation is 0.07 and the design effect of five seeds is
-1.3. Table \@ref(tab:tab7) compares the correct analysis (one sequential unit per
-instance) with pseudoreplication (every (instance, seed) row fed as its own instance).
+```{r cluster-numbers}
+c8 <- t8[t8$w > 0, ]
+icc8 <- (0.05^2 / 3) / (0.05^2 / 3 + (0.173^2 + 2 * 0.03^2) / 3)
+pr5 <- c8[c8$method == "pseudorep:betting" & c8$seeds == 5, ]
+co5 <- c8[c8$method == "seqbench:betting" & c8$seeds == 5, ]
+```
+
+The cluster amendment adds to the paired difference an instance-specific term
+$v_i \sim U(-w, w)$ shared by all seeds of instance $i$, so that the differences within an
+instance are positively correlated and an analysis by row is genuinely invalid. With $w = 0.05$
+the intra-instance correlation is `r sprintf("%.2f", icc8)` and the design effect of five seeds
+is `r sprintf("%.1f", 1 + 4 * icc8)`. Table \@ref(tab:tab7) compares the correct analysis (one
+sequential unit per instance) with pseudoreplication (every (instance, seed) row fed as its own
+instance).
 
 ```{r tab7}
-t8 <- read.csv("data/T8_cluster_v2.csv")
-t8 <- t8[t8$w > 0 & !(t8$method == "pseudorep:betting" & t8$seeds == 1L), ]   # one-seed pseudoreplication is the one-seed analysis
-lab <- c("seqbench:betting" = "betting", "pseudorep:betting" = "betting, pseudoreplication",
-         "seqbench:empirical_bernstein" = "empirical Bernstein", "fixed:final" = "fixed $n = 2000$")
-t8$inst <- ifelse(t8$method == "pseudorep:betting", t8$median_n / t8$seeds, t8$median_n)
-cell <- function(n, ev, p) paste0(sprintf("%.0f", n), ifelse(p > 0.005, sprintf("$^{%.0f\\%%}$", 100 * p), ""), " (", sprintf("%.0f", ev), ")")
-t8$v <- cell(t8$inst, t8$mean_cost, t8$p_inconclusive)
-w <- reshape(t8[, c("method", "seeds", "mu", "v")], idvar = c("method", "seeds"), timevar = "mu", direction = "wide")
-mc <- aggregate(miscover_rate ~ method + seeds, t8, max); names(mc)[3] <- "cov"
+t8w <- t8[t8$w > 0 & !(t8$method == "pseudorep:betting" & t8$seeds == 1L), ]   # one-seed pseudoreplication is the one-seed analysis
+lab8 <- c("seqbench:betting" = "betting", "pseudorep:betting" = "betting, pseudoreplication",
+          "seqbench:empirical_bernstein" = "empirical Bernstein", "fixed:final" = "fixed $n = 2000$")
+t8w$inst <- ifelse(t8w$method == "pseudorep:betting", t8w$median_n / t8w$seeds, t8w$median_n)
+cell8 <- function(n, ev, p) paste0(sprintf("%.0f", n), ifelse(p > 0.005, sprintf("$^{%.0f\\%%}$", 100 * p), ""), " (", sprintf("%.0f", ev), ")")
+t8w$v <- cell8(t8w$inst, t8w$mean_cost, t8w$p_inconclusive)
+w <- reshape(t8w[, c("method", "seeds", "mu", "v")], idvar = c("method", "seeds"), timevar = "mu", direction = "wide")
+mc <- aggregate(miscover_rate ~ method + seeds, t8w, max); names(mc)[3] <- "cov"
 w <- merge(w, mc)
-w <- w[order(match(w$method, names(lab)), w$seeds), ]
-w$method <- lab[w$method]
+w <- w[order(match(w$method, names(lab8)), w$seeds), ]
+w$method <- lab8[w$method]
 w$cov <- sprintf("%.2f\\%%", 100 * w$cov)
-names(w) <- c("Procedure", "Seeds", paste0("$\\mu = ", sort(unique(t8$mu)), "$"), "Max. cov. failure")
-knitr::kable(w, caption = "Seed clusters with an instance-specific differential effect ($w = 0.05$, $\\text{sd}(D) = 0.10$ per row), 2,000 replications: median instances to stopping (mean evaluations of both algorithms in parentheses; a superscript gives the percentage of inconclusive runs when above 0.5\\%) and the largest coverage-failure rate over the three effect sizes. For pseudoreplication the instances are the rows divided by five.",
+names(w) <- c("Procedure", "Seeds", paste0("$\\mu = ", sort(unique(t8w$mu)), "$"), "Max. cov. failure")
+knitr::kable(w, caption = "Seed clusters with an instance-specific differential effect ($w = 0.05$), 2,000 replications: median instances to stopping (mean evaluations of both algorithms in parentheses; a superscript gives the percentage of inconclusive runs when above 0.5\\%) and the largest coverage-failure rate over the three effect sizes. For pseudoreplication the instances are the rows divided by five.",
              escape = FALSE, row.names = FALSE, booktabs = TRUE, align = c("l", "c", rep("r", 4))) |>
   kableExtra::kable_styling(latex_options = c("hold_position", "scale_down"))
 ```
 
-The result is a negative one that the paper reports as measured. Pseudoreplication did not
-produce a false declaration in 12,000 runs, and its coverage failure rose only from 0.3%
-(one seed) to 1.2% ($\mu = 0.01$, five seeds), four times higher but still under the
-nominal 5%: a design effect of 1.3 is absorbed by the slack of the betting boundary
-documented in Section 5.6. Its cost equals that of a single-seed analysis, because it
-consumes the same rows under another label. The correct five-seed analysis saves 5 to 30%
-of the *instances* against one seed and costs 3.3 to 4.7 times the *evaluations*, as in
-the first ablation. The conclusion for practice is unchanged: seeds are a cluster, not
-replications, and averaging them is worth its price only when instances are expensive
-relative to evaluations; the guarantee did not visibly break here because the correlation
-was mild, not because pseudoreplication is safe.
+The result is negative, and we report it as measured. Pseudoreplication produced
+`r sum(c8$false_declaration[c8$method == "pseudorep:betting"])` false declarations in
+`r num(sum(c8$R[c8$method == "pseudorep:betting"]))` runs, and its coverage failure rose only to
+`r pct(max(pr5$miscover_rate))` with five seeds, against `r pct(max(co5$miscover_rate), 2)` for
+the correct analysis: a design effect of 1.3 is absorbed by the slack of the betting boundary
+documented in the coverage audit below. Its cost equals that of a single-seed analysis because
+it consumes the same rows under another label. The correct five-seed analysis saves
+`r pct(1 - max(co5$ratio_n_vs_1seed), 0)` to `r pct(1 - min(co5$ratio_n_vs_1seed), 0)` of the
+*instances* against one seed and costs `r sprintf("%.1f", min(co5$ratio_cost_vs_1seed))` to
+`r sprintf("%.1f", max(co5$ratio_cost_vs_1seed))` times the *evaluations*, as in the first
+ablation. The conclusion for practice is unchanged. Seeds are a cluster, not replications,
+and averaging them is worth its price only when instances are expensive relative to
+evaluations. The guarantee did not visibly break here because the correlation was mild, not
+because pseudoreplication is safe; the vaccination application of [Section 6](#sec-apps)
+measures a strong correlation.
 
 ## Why the cost is what it is: the truncated-bet regime {#sec-regime}
 
 The betting sequence bets a predictable fraction
 $\tilde\lambda_t = \sqrt{2\log(2/\alpha)/(\hat\sigma^2_{t-1}\, t \log(t+1))}$, truncated at
-$c/m$ for the candidate mean $m$ (with $c = 1/2$, about 1 near $m = 1/2$). While
-$\tilde\lambda_t$ exceeds the cap, which happens while
-$t\log(t+1) < 2\log(2/\alpha)/(\hat\sigma^2 \cdot \text{cap}^2)$, the bet is constant, the
-log-capital at a candidate at distance $g$ from the truth grows at about $\text{cap}\cdot g$
-per instance, and the stopping time is approximately
+$c/m$ and $c/(1-m)$ for the candidate mean $m$; with $c = 1/2$ the cap is close to 1 near
+$m = 1/2$. While $\tilde\lambda_t$ exceeds the cap, that is, while
+$t\log(t+1) < 2\log(2/\alpha)/(\hat\sigma^2 \cdot \text{cap}^2)$, the bet is constant, and for
+small variance the log-capital at a candidate at distance $g$ from $\nu$ grows by about
+$\text{cap} \cdot g$ per instance. With the hedging weight $1/2$, a threshold is excluded once
+that log-capital reaches $\log(2/\alpha)$, so the stopping time is approximately
 
-$$\tau \approx \frac{\log(2/\alpha)}{\text{cap}\cdot g} = \frac{\log(2/\alpha)\,(b-a)}{\text{cap}\cdot|\,|\mu| - \delta\,|},$$
+$$\tau \approx \frac{\log(2/\alpha)}{\text{cap}\cdot g} = \frac{\log(2/\alpha)\,(b-a)}{\text{cap}\cdot\big|\,|\mu| - \delta\,\big|},$$
 
 linear in the inverse distance to the nearest threshold and *independent of the variance*.
 Table \@ref(tab:tab6) compares this prediction with the observed medians.
 
-
 ```{r tab6}
-tab <- as.data.frame(rbind(
-  c("0.00", "0.02", "388", "369", "496"),
-  c("0.01", "0.01", "737", "738", "1066"),
-  c("0.05", "0.03", "254", "246", "272"),
-  c("0.10", "0.08", "97", "92", "100"),
-  c("0.20", "0.18", "44", "41", "44")
-), stringsAsFactors = FALSE)
-names(tab) <- c("$\\mu$", "distance", "observed, sd 0.03", "predicted", "observed, sd 0.10")
-knitr::kable(tab, caption = "Betting boundary, median instances observed and predicted by the truncated-bet approximation; $\\text{sd}(D) = 0.03$ (crossover at $t \\approx 4{,}060$) and $0.10$ (crossover at $t \\approx 480$).", escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
+b4 <- t4[t4$method == "seqbench:betting", ]
+lo4 <- b4[b4$h < 0.1, ]; hi4 <- b4[b4$h > 0.1, ]
+w <- data.frame(mu = sprintf("%.2f", lo4$mu), dist = sprintf("%.2f", lo4$distance),
+                obs_lo = sprintf("%.0f", lo4$median_n), pred = sprintf("%.0f", lo4$pred_truncated),
+                obs_hi = sprintf("%.0f", hi4$median_n[match(lo4$mu, hi4$mu)]))
+names(w) <- c("$\\mu$", "distance", "observed, sd 0.03", "predicted", "observed, sd 0.10")
+knitr::kable(w, caption = sprintf("Betting boundary: median instances observed and predicted by the truncated-bet approximation, for $\\text{sd}(D) = 0.03$ (crossover at $t \\approx %s$) and $0.10$ (crossover at $t \\approx %s$).", num(lo4$crossover_t[1]), num(hi4$crossover_t[1])),
+             escape = FALSE, row.names = FALSE, booktabs = TRUE) |>
   kableExtra::kable_styling(latex_options = "hold_position", font_size = 8)
+fit <- lm(log(median_n) ~ method + log(distance) + log(sd_d), data = t4[t4$p_inconclusive < 0.5, ])
+cf <- summary(fit)$coefficients
 ```
 
-At the low noise level the prediction is within 7% everywhere; at the high level it holds
-where the decision comes before the crossover and degrades to 1.34–1.44 of the prediction
-where it comes after, when the variance term of the bet becomes active. Figure \@ref(fig:regimes)
-shows the observed medians against the prediction. A log-log regression
-of the median stopping time on distance and standard deviation over the resolved cells gives
-slopes $-1.04$ (s.e. 0.02) and $+0.10$ (0.03).
+At the low noise level the prediction is within `r pct(max(abs(lo4$ratio_obs_pred - 1)), 0)` of
+the observed median everywhere. At the high noise level it holds where the decision comes
+before the crossover and degrades to `r sprintf("%.2f", min(hi4$ratio_obs_pred[hi4$median_n > hi4$crossover_t]))`--`r sprintf("%.2f", max(hi4$ratio_obs_pred[hi4$median_n > hi4$crossover_t]))`
+times the prediction where it comes after, when the variance term of the bet becomes active.
+Figure \@ref(fig:regimes) shows the observed medians against the prediction. A log-log
+regression of the median stopping time on the distance and the standard deviation over the
+resolved cells of both boundaries, with a boundary-specific intercept, gives slopes
+`r sprintf("%.2f", cf["log(distance)", 1])` (s.e. `r sprintf("%.2f", cf["log(distance)", 2])`)
+and `r sprintf("%+.2f", cf["log(sd_d)", 1])` (`r sprintf("%.2f", cf["log(sd_d)", 2])`).
 
-```{r regimes, out.width = "100%", fig.cap = "Median instances to decision against the distance to the nearest decision threshold (log-log), betting and empirical-Bernstein boundaries, two noise levels, 2,000 replications per point. Lines: the truncated-bet prediction log(2/alpha) / (cap x g).", fig.alt = "Log-log scatter of median stopping time versus distance with two straight prediction lines; points fall on the lines except at the smallest distances for the higher noise level."}
-knitr::include_graphics("figures/F2_stopping_time.png")
+```{r regimes, fig.width = 7, fig.height = 4, out.width = "100%", fig.cap = "Median instances to decision against the distance to the nearest decision threshold (log-log), betting and empirical-Bernstein boundaries, two noise levels, 2,000 replications per point. Lines: the truncated-bet prediction.", fig.alt = "Log-log scatter of median stopping time versus distance with two straight prediction lines; points fall on the lines except at the smallest distances for the higher noise level."}
+f2 <- t4
+f2$boundary <- ifelse(f2$method == "seqbench:betting", "betting", "empirical Bernstein")
+ggplot(f2, aes(distance, median_n, colour = boundary)) +
+  geom_line(aes(y = pred_truncated, linetype = "truncated-bet prediction")) +
+  geom_point(aes(shape = factor(round(sd_d, 2))), size = 2.5) +
+  scale_x_log10() + scale_y_log10() +
+  labs(x = "distance to the nearest threshold, ||mu| - delta| (loss units)",
+       y = "median instances to decision", colour = "boundary", shape = "sd(D)", linetype = NULL) +
+  theme_minimal()
 ```
 
-Two practical consequences: in low-noise
-benchmarks with a tight margin, halving the distance to the threshold doubles the cost rather
-than quadrupling it; and the boundary cannot exploit small variance beyond its bet cap, which
-is exactly why the Gaussian sequence, which bets on $g/\sigma^2$, is so much faster when
-$\sigma$ is small. Raising the cap helps and costs nothing measurable: in a sweep on the twelve baseline
-cells (2,000 replications each, same streams), $c = 0.9$ needed 222 instead of 388
-instances at the null and 143 instead of 254 at $\mu = 0.05$ for $\text{sd}(D) = 0.03$
-(385 and 165 instead of 496 and 272 at $\text{sd}(D) = 0.10$), with the largest
-false-declaration rate rising from 0.20% to 0.70% and the largest coverage failure from
-0.55% to 1.40%, both far below $\alpha$; $c = 0.99$ gains little more. The rest of the gap
-to the Gaussian sequence is not recoverable on a bounded support, as Section 7 explains.
+There are two practical consequences. In low-noise benchmarks with a tight margin, halving
+the distance to the threshold doubles the cost rather than quadrupling it. And the boundary
+cannot exploit a small variance beyond its bet cap, which is why the Gaussian sequence, whose
+bet scales with $g/\sigma^2$, is so much faster when $\sigma$ is small. Raising the cap helps at
+a small, measurable price. In a sweep on the twelve baseline cells (2,000 replications each,
+same streams), $c = 0.9$ needed 222 instead of 388 instances at the null and 143 instead of 254
+at $\mu = 0.05$ for $\text{sd}(D) = 0.03$ (385 and 165 instead of 496 and 272 at
+$\text{sd}(D) = 0.10$), while the largest false-declaration rate rose from 0.20% to 0.70% and
+the largest coverage failure from 0.55% to 1.40%, both still far below $\alpha$; $c = 0.99$
+gained little more. Coverage is guaranteed for any $c \in (0, 1)$.
 
 ## Time-uniform coverage without stopping {#sec-audit}
 
-Coverage in Table \@ref(tab:tab2) is measured up to the stopping time. A separate audit
-ran each boundary over the full stream of 2,000 instances on the same 24 cells (same seeds,
-hence the same streams; for the betting boundary the exact capital at the true mean is
-evaluated, which needs no grid) and recorded whether the true mean ever left the running
-confidence sequence. Over 2,000 replications per cell the largest failure rate was 1.55%
-for betting, 0.25% for empirical Bernstein and 0 for Hoeffding, against the nominal 5%:
-the time-uniform guarantee holds with room to spare, which is the other face of the cost
-measured above.
+Coverage in Table \@ref(tab:tab2) is measured up to the stopping time. A separate audit ran
+each boundary over the full stream of 2,000 instances in the same 24 cells (same seeds, hence
+the same streams; for the betting boundary the exact capital at the true mean is evaluated,
+which needs no grid) and recorded whether the true mean ever left the running confidence
+sequence. Over 2,000 replications per cell the largest failure rate was 1.55% for betting,
+0.25% for empirical Bernstein and 0 for Hoeffding, against the nominal 5%. The time-uniform
+guarantee holds with room to spare, which is the other face of the cost measured above.
 
 ## Negative effects and effects near the margin {#sec-extra}
 
-The first amendment fills the two gaps of the baseline grid: effects in the direction of A,
-and effects 0.005 and 0.01 away from a decision threshold ($|\mu| \in \{0.015, 0.025,
-0.03\}$ with $\delta = 0.02$). Over its 13 valid cells no valid boundary made a false
-declaration (upper Wilson bound 0.19% per cell); the `safestats` sequence reached 0.95%
-and the repeatedly inspected $t$-test 22.8% ($\mu = -0.015$, high noise). Coverage
-failure up to stopping was at most 0.25% for betting and 0 for the other two.
-Table \@ref(tab:tab8) gives the cost.
+```{r extra-numbers}
+v7 <- t7[grepl("^seqbench:(betting|empirical|hoeff)", t7$method), ]
+e <- function(m, mu, h, col) t7[t7$method == m & abs(t7$mu - mu) < 1e-9 & abs(t7$h - h) < 1e-6, col]
+near_hi <- t7[abs(abs(t7$mu) - 0.02) < 0.0051 & t7$h > 0.1, ]
+near_lo <- t7[abs(abs(t7$mu) - 0.02) < 0.0051 & t7$h < 0.1, ]
+ph <- function(s) planning_horizon(comparison_design(margin = 0.02, bounds = c(0, 1)), 0.005, sd = s)
+```
+
+The first amendment fills two gaps of the baseline grid: effects in the direction of A, and
+effects 0.005 and 0.01 away from a decision threshold ($|\mu| \in \{0.015, 0.025, 0.03\}$ with
+$\delta = 0.02$). Over its 13 valid cells no distribution-free boundary made a false
+declaration (`r sum(v7$false_declaration)` in `r num(sum(v7$R))` runs; upper Wilson bound 0.19% per
+cell), whereas the \pkg{safestats} sequence reached `r pct(max(t7$false_rate[t7$method == "savi_cs"]), 2)`
+and the repeatedly inspected $t$-test `r pct(max(t7$false_rate[t7$method == "seqbench:naive_fixed"]))`.
+Coverage failure up to stopping was at most `r pct(max(t7$miscover_rate[t7$method == "seqbench:betting"]), 2)`
+for betting and 0 for the other two boundaries. Table \@ref(tab:tab8) gives the cost.
 
 ```{r tab8}
-t7 <- read.csv("data/T7_extra.csv")
-lab <- c("seqbench:betting" = "betting", "seqbench:empirical_bernstein" = "empirical Bernstein",
-         "seqbench:hoeffding" = "Hoeffding", "fixed:500" = "fixed $n = 500$",
-         "savi_cs" = "\\CRANpkg{safestats} CS, oracle sd")
-t7 <- t7[t7$method %in% names(lab), ]
-cell <- function(m, p) ifelse(p >= 0.9, "budget", ifelse(p > 0.005, sprintf("%.0f$^{%.0f\\%%}$", m, 100 * p), sprintf("%.0f", m)))
-t7$v <- cell(t7$median_n, t7$p_inconclusive)
-mus <- sort(unique(t7$mu))
-w <- do.call(rbind, lapply(sort(unique(t7$h)), function(hh) do.call(rbind, lapply(names(lab), function(m) {
-  x <- t7[t7$h == hh & t7$method == m, ]
-  data.frame(sd = ifelse(hh < 0.1, "0.03", "0.10"), method = lab[m], t(ifelse(is.na(match(mus, x$mu)), "---", x$v[match(mus, x$mu)])))
+lab7 <- c("seqbench:betting" = "betting", "seqbench:empirical_bernstein" = "empirical Bernstein",
+          "seqbench:hoeffding" = "Hoeffding", "fixed:500" = "fixed $n = 500$",
+          "savi_cs" = "\\pkg{safestats} CS, oracle sd")
+t7s <- t7[t7$method %in% names(lab7), ]
+t7s$v <- cell(t7s$median_n, t7s$p_inconclusive)
+mus <- sort(unique(t7s$mu))
+w <- do.call(rbind, lapply(sort(unique(t7s$h)), function(hh) do.call(rbind, lapply(names(lab7), function(m) {
+  x <- t7s[t7s$h == hh & t7s$method == m, ]
+  data.frame(sd = ifelse(hh < 0.1, "0.03", "0.10"), method = lab7[[m]],
+             t(ifelse(is.na(match(mus, x$mu)), "---", x$v[match(mus, x$mu)])))
 }))))
 w$sd[duplicated(w$sd)] <- ""
 names(w) <- c("$\\text{sd}(D)$", "Procedure", paste0("$", mus, "$"))
-knitr::kable(w, caption = "Median instances to stopping in the amended cells ($\\mu$ in the column heads; $\\delta = 0.02$), 2,000 replications, same conventions as Table 3; ``---'' marks the cell invalid by construction.",
+knitr::kable(w, caption = "Median instances to stopping in the amended cells ($\\mu$ in the column heads; $\\delta = 0.02$), 2,000 replications, same conventions as Table 3; ``---'' marks the cell that is invalid by construction.",
              escape = FALSE, row.names = FALSE, booktabs = TRUE, align = c("l", "l", rep("r", 7))) |>
   kableExtra::kable_styling(latex_options = c("hold_position", "scale_down"))
 ```
 
-Two readings. The procedures are symmetric in the sign of $\mu$, as they should be: the
-betting boundary needs 255 and 269 instances at $\mu = -0.05$ against 254 and 272 at
-$+0.05$. And 0.005 from a threshold is beyond every procedure at the high noise level, the
-Gaussian oracle included: `safestats` is inconclusive in 75% of the runs and betting in 80%,
-against 98% for a fixed sample of 100 whose interval is simply too wide to declare. At the
-low noise level betting resolves these cells in a median of about 1,500 instances with 3 to
-6% inconclusive runs, and the Gaussian sequence in about 400, the 0.27 ratio of Table
-\@ref(tab:tab4) again. The planning function of Section 3.3 returns exactly this horizon
-before the first instance is run, which is where a benchmarker should learn that a
-distance of 0.005 is not a question the budget can answer.
+Two readings. The procedures are symmetric in the sign of $\mu$, as they should be: the betting
+boundary needs `r num(e("seqbench:betting", -0.05, 0.052, "median_n"))` and
+`r num(e("seqbench:betting", -0.05, 0.173, "median_n"))` instances at $\mu = -0.05$ against
+`r num(g("seqbench:betting", 0.05, 0.052))` and `r num(g("seqbench:betting", 0.05))` at $+0.05$.
+And a distance of 0.005 from a threshold is beyond every procedure at the high noise level, the
+Gaussian oracle included: \pkg{safestats} is inconclusive in
+`r pct(min(near_hi$p_inconclusive[near_hi$method == "savi_cs"]), 0)`--`r pct(max(near_hi$p_inconclusive[near_hi$method == "savi_cs"]), 0)`
+of the runs and betting in `r pct(min(near_hi$p_inconclusive[near_hi$method == "seqbench:betting"]), 0)`--`r pct(max(near_hi$p_inconclusive[near_hi$method == "seqbench:betting"]), 0)`.
+At the low noise level betting resolves these cells in a median of about
+`r num(100 * round(mean(near_lo$median_n[near_lo$method == "seqbench:betting"]) / 100))` instances with
+`r pct(min(near_lo$p_inconclusive[near_lo$method == "seqbench:betting"]), 0)` to
+`r pct(max(near_lo$p_inconclusive[near_lo$method == "seqbench:betting"]), 0)` inconclusive runs, and
+the Gaussian sequence in about `r num(100 * round(mean(near_lo$median_n[near_lo$method == "savi_cs"]) / 100))`.
+Before the first instance is run, `planning_horizon()` with the true standard deviation returns
+`r num(ph(0.03))` (low noise) and `r num(ph(0.10))` (high noise) instances for this distance,
+both beyond the budget of 2,000: this is where a benchmarker should learn that a distance of
+0.005 is not a question the budget can answer.
 
 # Applications {#sec-apps}
 
-All three applications use the workflow of Section 4 with the same reference procedures.
-The truth is unknown, so they demonstrate usability and cost, not error rates.
+The first two applications were frozen on 2026-10-23, before any loss was computed. Each
+defines a population of instances by a random generator. To measure operating
+characteristics with a known truth, a pool of 10,000 i.i.d. instances is generated once and
+1,000 streams are resampled from it with replacement. The resampling population is the pool's
+empirical distribution, whose mean is known exactly, so false declarations and coverage can be
+counted; for the generator population itself the pool mean is an estimate, with a Monte Carlo
+standard error of `r sprintf("%.4f", pool("cvrp")$sd / 100)` (routing) and
+`r sprintf("%.4f", pool("epidemic", 5L)$sd / 100)` (vaccination). The pool in generation order is also a live
+stream of fresh instances, which is how a user would run the comparison
+(Figure \@ref(fig:fig-apps)). The procedures are the betting and empirical-Bernstein
+boundaries, fixed samples of 100 and 3,000 instances, and the \pkg{safestats} sequence, whose
+design now uses the standard deviation of an independent pilot of 200 instances, as a user
+would; the vaccination study adds the invalid pseudoreplication analysis.
 
-## Two estimators of location
+```{r apps-numbers}
+cv <- pool("cvrp"); ep5 <- pool("epidemic", 5L); ep1 <- pool("epidemic", 1L)
+cvb <- app("cvrp", "seqbench:betting"); cve <- app("cvrp", "seqbench:empirical_bernstein")
+cvs <- app("cvrp", "savi_cs"); cvf <- app("cvrp", "fixed:100"); cvF <- app("cvrp", "fixed:final")
+eb5 <- app("epidemic", "seqbench:betting", 5L); eb1 <- app("epidemic", "seqbench:betting", 1L)
+ee5 <- app("epidemic", "seqbench:empirical_bernstein", 5L)
+es5 <- app("epidemic", "savi_cs", 5L); es1 <- app("epidemic", "savi_cs", 1L)
+ep5r <- app("epidemic", "pseudorep:betting", 5L)
+dec_word <- function(x) switch(x, A = "A is relevantly better", B = "B is relevantly better",
+                               equivalent = "practically equivalent", x)
+```
 
-Instances are samples of size 20, 40 or 80 from a contaminated normal with scale
-$\sim U(1, 3)$ and contamination fraction $\sim U(0, 0.25)$, drawn per instance; A is the
-sample mean, B the 20% trimmed mean; the loss is the absolute error divided by the scale,
-capped at 1; $\delta = 0.02$; 500 replications of streams of up to 3,000 instances. A
-Monte Carlo reference over 100,000 instances puts $\mu$ at 0.086. All procedures declared
-the trimmed mean relevantly better in every replication; the median number of instances was
-81 for the `safestats` sequence (pilot-estimated sd), 128 for betting, 246 for empirical
-Bernstein, and 3,000 for the fixed-sample test, which only decides at the end of its budget.
+## Vehicle routing heuristics {#sec-cvrp}
 
-## Two knapsack heuristics
+A distribution planner must choose a constructive heuristic for the capacitated vehicle
+routing problem [@toth2014]: the sweep algorithm of @gillett1974 (A) or the savings algorithm
+of @clarke1964 (B), both followed by 2-opt inside each route [@croes1958]. Instances follow the
+generator logic of @uchoa2017: 50 to 150 customers in the unit square, a central, eccentric or
+random depot, uniform, clustered or mixed customer positions, unitary, small or large demands,
+and a capacity giving 4 to 25 customers per route on average. The loss is the relative gap
+$1 - LB/z$ of the solution cost $z$ to the lower bound
+$LB = \max\{\text{MST},\ 2\sum_i q_i d_{0i}/Q\}$, the larger of the minimum spanning tree of the
+depot and customers and the radial bound. It lies in $[0, 1)$ for any feasible solution by
+construction, so the bounds $[0, 1]$ need no truncation. The margin is one percentage point of
+gap ($\delta = 0.01$) and the cost is CPU time. The pool mean is
+$\mu = `r sprintf("%.4f", cv$mu)`$ (sd `r sprintf("%.3f", cv$sd)`, skewness
+`r sprintf("%.2f", cv$skewness)`): the savings algorithm closes about
+`r sprintf("%.1f", 100 * cv$mu)` percentage points more of the gap.
 
-Instances are random 0/1 knapsack problems with 50 to 200 items; A is the greedy heuristic
-by value-to-weight ratio, B a GRASP-like randomised greedy with local search and 20
-restarts; the loss is the relative gap to the Dantzig linear-programming bound, truncated
-at 5% and rescaled to $[0, 1]$, so that the margin $\delta = 0.02$ is 0.1 percentage points
-of gap (the truncation is the operational choice of Section 2, made because raw gaps of
-0.1–1% would waste the $[0, 1]$ scale); the cost is the number of objective evaluations;
-100 replications of up to 600 instances. The betting sequence declared the GRASP-like
-heuristic relevantly better in every replication after a median of 397 instances
-(76 million evaluations); the fixed-sample test declared the same at 600; the empirical
-Bernstein sequence was inconclusive at 600 in 97% of the replications, its interval
-[0.015, 0.066] still straddling the margin.
+On the live stream the betting sequence declared "`r dec_word(live("cvrp")$decision)`" after
+`r num(live("cvrp")$n_instances)` instances (`r sprintf("%.1f", live("cvrp")$cpu_seconds)` CPU
+seconds), with final interval $[`r sprintf("%.3f", live("cvrp")$lower)`, `r sprintf("%.3f", live("cvrp")$upper)`]$;
+empirical Bernstein needed `r num(live("cvrp", "empirical_bernstein")$n_instances)`. Over 1,000
+resampled streams every procedure declared B in `r pct(min(a10$p_B[a10$app == "cvrp"]), 0)` of
+the runs, with no false declaration. The effect is large relative to the margin, so a fixed
+sample of 100 instances would also have sufficed; the sequential procedures find this out
+without knowing it in advance, while a cautious fixed sample of 3,000 instances spends
+`r num(cvF$mean_cost, 0)` CPU seconds against `r num(cvb$mean_cost, 1)` for the betting
+sequence (median `r num(cvb$median_n)` instances; empirical Bernstein `r num(cve$median_n)`,
+the pilot-designed Gaussian sequence `r num(cvs$median_n)`). Coverage failure up to stopping was
+`r pct(cvb$miscover_rate)` for betting, `r pct(cvs$miscover_rate)` for the Gaussian sequence
+and `r pct(cvf$miscover_rate)` for the fixed sample of 100, which has a single, nominal 95%
+interval. Table \@ref(tab:tab-apps) collects the results of both applications.
 
-## Louvain versus Leiden
+## Vaccination strategies on contact networks {#sec-epidemic}
 
-Instances are stochastic block models with 3 to 6 blocks of unequal sizes, 80 to 300
-nodes and per-instance mixing; A is \CRANpkg{igraph} [@igraph] `cluster_louvain()`, B
-`cluster_leiden()` run to convergence on modularity, both with the instance's seed; the
-loss is $1 - Q$ with bounds $[0, 1.5]$; $\delta = 0.01$ (one modularity point); 100
-replications of up to 6,000 instances. A Monte Carlo reference over 5,000 instances puts the
-mean difference at 0.0055 in favour of Leiden, inside the margin, and the per-instance
-differences are far from Gaussian: 40% exact ties, Louvain ahead in 3.5% of the instances,
-skewness 1.8. All four procedures declared practical equivalence in every replication. The
-betting sequence did so after a median of 2,533 instances, empirical Bernstein after 5,090,
-the fixed-sample test at its limit of 6,000, and the `safestats` sequence after a median of
-26. That last number is not a success. On this distribution the Gaussian sequence, fed a
-pilot standard deviation, stops after 4 or 5 instances whenever the first differences are
-all ties, with an interval that has collapsed to a point; its running interval excluded the
-reference mean in 15% of the replications (against 0 for the two bounded boundaries; the
-fixed-sample "failures" are not interpretable, since at $n = 6{,}000$ its interval is as
-narrow as the reference's own Monte Carlo error). The declaration happened to be right
-because the truth is equivalence, but the guarantee was gone. This is the case for
-distribution-free validity in one picture: algorithm outputs tie, cluster and skew, and a
-sequence that assumes a model pays for its speed in coverage exactly where the assumption
-fails.
+With the same number of doses, does vaccinating the highest-degree people (degree targeting,
+B), which needs the full contact network, reduce the final attack rate of an epidemic by a
+practically relevant amount relative to acquaintance immunisation [@cohen2003], which
+vaccinates a random contact of a random person and needs only local information (A)? Both
+improve on random vaccination in heterogeneous networks [@pastorsatorras2002]. Instances are
+networks of 1,000 to 3,000 people drawn from five models (Erdős--Rényi, Barabási--Albert, Watts--Strogatz,
+stochastic block model with 5 to 20 communities, and power-law Chung--Lu), with
+$R_0 \sim U(1.5, 3)$, vaccine coverage between 5% and 20%, and five index cases. The
+epidemic is an SIR process with a fixed infectious period; its final size is exactly the size
+of the union of the index cases' clusters in bond percolation on the network without the
+vaccinated [@newman2002; @kenah2007], which is how it is simulated with \CRANpkg{igraph}
+[@igraph]. The loss is the attack rate, the fraction of the population infected, in $[0, 1]$ by
+construction, and the margin is one percentage point ($\delta = 0.01$). Each instance has five
+seeds, independent epidemics in which both strategies share the percolated network and the
+order from which index cases are taken (common random numbers), so the pairing is by
+(instance, seed) and the seeds of a network form a cluster.
 
-# Discussion {#sec-discussion}
+The pool is not Gaussian: the per-network difference has skewness
+`r sprintf("%.2f", ep1$skewness)` with one seed and `r pct(ep1$ties, 1)` exact ties (both
+strategies stop the epidemic, or both fail to), and the differences of the five simulations of
+a network are strongly correlated, with an intra-network correlation of
+`r sprintf("%.2f", ep5$icc)` and a design effect of `r sprintf("%.1f", ep5$design_effect)`.
+Degree targeting lowers the attack rate by $\mu = `r sprintf("%.3f", ep5$mu)`$ on average,
+far beyond the margin. On the live stream the five-seed betting analysis declared
+"`r dec_word(live("epidemic", s = 5L)$decision)`" after `r num(live("epidemic", s = 5L)$n_instances)`
+networks (`r num(live("epidemic", s = 5L)$n_evaluations)` paired simulations). Over the
+resampled streams every procedure declared B in every run. The informative comparison is the
+cost of the two designs: the five-seed analysis needed a median of `r num(eb5$median_n)`
+networks and the one-seed analysis `r num(eb1$median_n)`, at `r num(eb5$mean_cost, 1)` against
+`r num(eb1$mean_cost, 1)` CPU seconds. Averaging five epidemics per network bought nothing,
+because the betting sequence decides here in its truncated-bet regime, where the stopping time
+does not depend on the variance ([Section 5](#sec-sim), truncated-bet regime); one simulation per network, and
+more networks, is the better design. The invalid pseudoreplication analysis stopped after a
+median of `r num(ep5r$median_n)` simulations, about `r num(ep5r$median_n / 5)` networks, and its
+interval missed the truth in `r pct(ep5r$miscover_rate)` of the streams against
+`r pct(eb5$miscover_rate)` for the correct analysis. With an effect `r sprintf("%.0f", ep5$mu / 0.01)`
+times the margin this did not produce false declarations, but its interval treats correlated
+simulations as independent evidence, and no guarantee covers it. The pilot-designed Gaussian
+sequence did not lose coverage on these data.
 
-**What the package buys.** A benchmark that peeks, adapts and stops early keeps its error
-guarantee, at a stated level, with an auditable record of what was assumed and consumed, and
-with "we could not tell within the budget" as a legitimate outcome. The simulation study
-puts numbers on the failure this prevents (38% false declarations for the peeking $t$-test)
-and on what adaptation saves relative to fixed samples.
+```{r tab-apps}
+labA <- c("seqbench:betting" = "betting", "seqbench:empirical_bernstein" = "empirical Bernstein",
+          "fixed:100" = "fixed $n = 100$", "fixed:final" = "fixed $n = 3000$",
+          "savi_cs" = "\\pkg{safestats} CS, pilot sd", "pseudorep:betting" = "betting, pseudoreplication (invalid)")
+x <- a10[a10$method %in% names(labA) & !(a10$method == "pseudorep:betting" & a10$seeds == 1L), ]   # one-seed pseudoreplication is the one-seed analysis
+x <- x[order(match(x$app, c("cvrp", "epidemic")), -x$seeds, match(x$method, names(labA))), ]
+w <- data.frame(Application = ifelse(x$app == "cvrp", "routing", paste0("epidemic, ", x$seeds, " seed", ifelse(x$seeds > 1, "s", ""))),
+                Procedure = labA[x$method],
+                Declared = sprintf("%.1f\\%%", 100 * ifelse(x$truth == "A", x$p_A, ifelse(x$truth == "B", x$p_B, x$p_equivalent))),
+                False = sprintf("%.1f\\%%", 100 * x$false_rate),
+                Inconclusive = sprintf("%.1f\\%%", 100 * x$p_inconclusive),
+                Coverage = sprintf("%.1f\\%%", 100 * x$miscover_rate),
+                Median = sprintf("%.0f", x$median_n), CPU = sprintf("%.1f", x$mean_cost))
+w$Application[duplicated(w$Application)] <- ""
+names(w) <- c("Application", "Procedure", "correct", "false", "inconcl.", "cov. failure", "median $n$", "CPU s")
+knitr::kable(w, caption = "Applications, 1,000 streams resampled from each frozen pool: rates of correct declarations, false declarations and inconclusive outcomes, coverage failure up to stopping, median instances to stopping and mean CPU seconds consumed. For pseudoreplication the median counts simulations, not networks.",
+             escape = FALSE, row.names = FALSE, booktabs = TRUE, linesep = "", align = c("l", "l", rep("r", 6))) |>
+  kableExtra::kable_styling(latex_options = c("hold_position", "scale_down"))
+```
 
-**What it costs.** Distribution-free validity for bounded losses is expensive when the
-losses have small variance relative to their range: the Gaussian sequence with a known
-variance needed 5 to 20 times fewer instances at the low noise level. The mechanism is the
-bet cap, and the consequence is a floor on the cost of bounded-only validity that does not
-vanish as the variance shrinks. That floor is a theorem, not an artefact of the boundaries
-used here: a standard change-of-measure argument against a small contamination at an
-endpoint of the loss range shows that any procedure valid for every bounded distribution
-needs, in expectation, at least of the order of $\log(1/\alpha)/g$ instances, whatever the
-variance; the betting sequence with its cap near 1 stays within a factor of about 1.5 of it
-in every cell of the simulation study (a companion paper, in preparation, gives the
-statement and proof). Two levers are available now: declare bounds as tight as the loss
-allows (truncating a gap at a sensible cutoff, as in the knapsack application, is such a
-declaration) and raise the bet cap towards 1. A declared variance bound did not help much
-with the construction implemented in the package: the `bernstein_declared` boundary, a
-predictable-plug-in Bennett sequence that takes a declared upper bound on the standard
-deviation, needed 220 instances at the low-noise null where betting with $c = 0.9$ needed
-222 (and 968 against 385 at the high-noise null), because Bennett's bound keeps a range term
-of order $\log(2/\alpha)/t$; with the bound declared at half its true value it was faster
-and still covered in more than 98% of the replications, which says how loose the bound is
-rather than how safe the violation would be in general. This is a property of the Bennett
-construction, not a proved limit: the floor above does not extend to procedures that assume
-a variance bound, and whether one can do markedly better on bounded data is open. The
-Gaussian sequence escapes the floor by assuming a symmetric, light-tailed model, and what
-breaks it is skewness: in a further simulation with bounded paired differences its
-coverage failed in 13% of the replications when the differences had skewness 1.9 and no
-ties, while 70% ties without skewness left it intact; the betting and empirical-Bernstein
-sequences did not fail in any of those cells. The Louvain–Leiden application shows the same
-bill on real algorithm outputs.
+```{r fig-apps, fig.width = 7, fig.height = 3, out.width = "100%", fig.cap = "Live runs of the betting sequence on fresh instances in generation order: running confidence sequence for the mean paired difference against the number of instances (networks, for the epidemic with five seeds each), with the equivalence band. Left: acquaintance minus degree targeting, attack rate. Right: sweep minus savings, relative gap. The vertical axis is cut at [-0.1, 0.3]; the early intervals are wider.", fig.alt = "Two panels, each with a shaded band narrowing over instances until it lies entirely above the grey equivalence band."}
+f3$panel <- ifelse(f3$app == "cvrp", "vehicle routing", paste0("vaccination (", f3$seeds, " seeds)"))
+f3 <- f3[f3$app == "cvrp" | f3$seeds == 5, ]
+ggplot(f3, aes(t)) +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.01, ymax = 0.01, alpha = 0.15, fill = "grey40") +
+  geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey30") +
+  geom_ribbon(aes(ymin = lower_running, ymax = upper_running), alpha = 0.3, fill = "#2b6cb0") +
+  geom_line(aes(y = estimate), colour = "#2b6cb0") +
+  facet_wrap(~ panel, scales = "free") +
+  coord_cartesian(ylim = c(-0.1, 0.3)) +
+  labs(x = "instances", y = "mean(loss_a - loss_b)") + theme_minimal()
+```
+
+## Louvain versus Leiden {#sec-louvain}
+
+The third application, frozen on 2026-09-25, compares two community-detection algorithms whose
+outputs tie, cluster and skew. Instances are stochastic block models with 3 to 6 blocks of
+unequal sizes, 80 to 300 nodes and per-instance mixing; A is `cluster_louvain()` of
+\pkg{igraph}, B `cluster_leiden()` run to convergence on modularity, both with the instance's
+seed; the loss is $1 - Q$ with bounds $[0, 1.5]$, and $\delta = 0.01$ (one modularity point).
+Its 100 replications are fresh streams of up to 6,000 instances, so the truth is known only
+through a Monte Carlo reference of 5,000 instances, which puts the mean difference at 0.0055
+in favour of Leiden, inside the margin. The per-instance differences are far from Gaussian:
+40% exact ties, Louvain ahead in 3.5% of the instances, skewness 1.8. All four procedures
+declared practical equivalence in every replication: the betting sequence after a median of
+2,533 instances, empirical Bernstein after 5,090, the fixed-sample test at its limit of 6,000,
+and the \pkg{safestats} sequence after a median of 26. That last number is not a success. On
+this distribution the Gaussian sequence, designed with a pilot standard deviation, stopped
+after 4 or 5 instances whenever the first differences were all ties, with an interval that had
+collapsed to a point, and its running interval excluded the reference mean in 15% of the
+replications, against none for the two bounded boundaries. The declaration happened to be
+right because the truth is equivalence, but the guarantee was gone. Algorithm outputs tie,
+cluster and skew, and a sequence that assumes a model pays for its speed in coverage exactly
+where the assumption fails.
+
+Two earlier applications, a location-estimator comparison and a knapsack heuristic comparison,
+remain in `experiments/` with their frozen configurations; they show nothing the three above do
+not.
+
+# Potential uses {#sec-uses}
+
+The protocol applies wherever two procedures are compared on a stream of independent units with
+bounded, paired losses and the cost of each unit matters. We see five families of use.
+
+- **Monte Carlo studies in statistics.** Comparing two estimators, tests or interval procedures
+  by simulation is a benchmark whose instances are i.i.d. by construction, so (A1) holds
+  exactly. The package then answers the question that fixed replication counts leave open:
+  when can the study stop?
+- **Operations research and optimisation.** Heuristics, metaheuristics and solver settings
+  compared on an instance generator, as in the routing application of [Section 6](#sec-apps). A natural loss is a gap to
+  a bound, which is bounded by construction, and the cost column can be CPU time or objective
+  evaluations.
+- **Regression testing of numerical software.** A new release of a solver against the previous
+  one on a generator of test problems, inside continuous integration: an equivalence
+  declaration is a statement of "no relevant regression" at a known error level, and an
+  inconclusive outcome is a reason to look, not a pass.
+- **Simulation-based policy evaluation.** Epidemic interventions ([Section 6](#sec-apps)),
+  traffic control, inventory and supply-chain policies evaluated in stochastic simulators or
+  digital twins. Scenarios drawn from a prior are the instances, stochastic replications are
+  the seeds, and outcomes such as attack rates, service levels or fill rates are bounded
+  proportions.
+- **Machine learning evaluation.** Two models scored on i.i.d. test examples with a bounded
+  per-example loss (zero-one loss, a capped log loss, a rubric score of a generated answer),
+  where labelling or grading each example is expensive. Cross-validation folds are not
+  independent instances [@nadeau2003]; the protocol applies to a held-out stream, not to
+  folds.
+
+Racing for algorithm configuration [@birattari2002] is a sequence of such comparisons; one
+pairwise race with \pkg{seqbench} is valid, but a race among many candidates needs a
+multiplicity correction or sequential model confidence sets [@arnold2026].
+
+# Limitations and open problems {#sec-limitations}
+
+**What it costs.** Distribution-free validity for bounded losses is expensive when the losses
+have a small variance relative to their range: the Gaussian sequence with a known variance
+needed `r sprintf("%.0f", 1 / max(sv_lo$ratio_to_betting))` to
+`r sprintf("%.0f", 1 / min(sv_lo$ratio_to_betting))` times fewer instances at the low noise
+level. The mechanism is the bet cap analysed in [Section 5](#sec-sim), and it implies a floor of
+order $\log(1/\alpha)(b-a)/\big||\mu| - \delta\big|$ instances that does not vanish as the
+variance shrinks. We conjecture that a floor of this order binds every procedure that is valid
+for all distributions on $[a, b]$: a small contamination at an endpoint of the range changes
+the mean while staying almost indistinguishable from the original distribution, which
+suggests a change-of-measure lower bound. We have not proved it. Two levers are available now:
+declare bounds as tight as the loss allows, because the cost scales with $b - a$, and raise the
+bet cap towards 1. A declared variance bound helped little with the construction implemented in
+the package: the `bernstein_declared` boundary needed 220 instances at the low-noise null where
+betting with $c = 0.9$ needed 222 (968 against 385 at the high-noise null), because Bennett's
+bound keeps a range term of order $\log(2/\alpha)/t$. This is a property of the Bennett
+construction, not a proved limit, and whether one can do markedly better on bounded data with a
+known variance bound is open. The Gaussian sequence escapes the floor by assuming a model;
+it kept its coverage in the routing and vaccination applications, where the effects were large,
+and lost it in the Louvain--Leiden application ([Section 6](#sec-apps)), where the paired
+differences tie and skew and the truth lies inside the margin.
 
 **What it does not claim.** The error control is a margin rule on an existing confidence
-sequence, obtainable from `safestats` or from the constructions of @choe2024
-by a user who knows what to do; sequential equivalence with e-processes is developed by
-@koobs2026. The package's contribution is the protocol, its refusals, its
-contract and the honest accounting.
+sequence, which a user who knows what to do could obtain from \pkg{safestats} or from the
+constructions of @choe2024; sequential equivalence testing with e-values, including
+data-dependent margins, is developed by @koobs2026. The package's contribution is the protocol,
+its refusals, its contract and the accounting of cost.
 
-**Limitations.** Two algorithms only (multiplicity across $k > 2$ needs a correction or the
-model confidence sets of @arnold2026); instances as the sequential unit (adding seeds
-adaptively within an instance is refused rather than modelled); bounded losses; and a
-population target, which is the right one for "problems like these" and the wrong one for
-a fixed benchmark suite.
+**Scope.** The current version has the following limits.
+
+- *Two algorithms.* Comparisons among $k > 2$ need a multiplicity correction or sequential
+  model confidence sets [@hansen2011; @arnold2026].
+- *A population target.* The estimand is the mean over a population of instances. Fixed
+  benchmark suites such as public instance libraries are not random samples from anything; for
+  them a finite-population target with sampling without replacement [@waudbysmith2020] is the
+  right one, and it is not implemented.
+- *Independent, exchangeable instances.* Instances that arrive in time, such as daily
+  operations or production traffic, may drift or be serially dependent, which violates (A1);
+  the package cannot detect this.
+- *Bounded losses.* A loss must have known bounds. Unbounded losses must be bounded by the
+  user, by truncation or penalisation, which changes the estimand, and wide bounds cost
+  instances in proportion to their width.
+- *A single, pre-specified margin and loss.* A trade-off between solution quality and
+  running time must be folded into one loss before the study; the margin cannot be revised
+  after inspection [@koobs2026 discuss post-hoc margins].
+- *A mean.* A mean difference can hide heterogeneity: in the vaccination pool the mean
+  benefit of degree targeting ranges from `r sprintf("%.3f", min(a12$mu))` in
+  `r a12$label[which.min(a12$mu)]` networks to `r sprintf("%.3f", max(a12$mu))` in
+  `r a12$label[which.max(a12$mu)]` networks. Subgroup questions need their own pre-registered
+  comparisons.
+- *Seeds fixed in advance.* Allocating more seeds to instances that look close is refused,
+  not modelled, so the package cannot exploit adaptive designs within an instance. With the
+  default boundary, extra seeds rarely pay unless the decision falls in the variance-driven
+  regime (Sections [5](#sec-sim) and [6](#sec-apps)).
+- *Implementation.* The betting boundary stores the history of observations, so memory grows
+  linearly with the stream, and its reported endpoints between calls are outer grid edges, at
+  most one grid cell (0.002 loss units on bounds $[0, 1]$ with the default grid) wider per side
+  than the exact set.
 
 # Summary {#sec-summary}
 
-`seqbench` turns an algorithm comparison into a pre-registered sequential experiment with an
-anytime-valid guarantee, a margin of practical equivalence and an honest account of cost.
-Version 0.1.0 is available from CRAN;^[<https://CRAN.R-project.org/package=seqbench>] the
-source is on GitHub^[<https://github.com/castlaboratory/seqbench>] and the documentation on
-the package site.^[<https://castlaboratory.github.io/seqbench/>]
-
+\pkg{seqbench} turns an algorithm comparison into a pre-registered sequential experiment with
+an anytime-valid guarantee, a margin of practical equivalence and an explicit account of cost.
+Its guarantee held in every simulated cell and application, the repeatedly inspected
+$t$-test it replaces did not, and the price of distribution-free validity is reported rather
+than hidden. Version 0.1.0 is on CRAN;^[<https://CRAN.R-project.org/package=seqbench>] the
+version described here (0.1.1) and every configuration and analysis script used in this
+article are on GitHub,^[<https://github.com/castlaboratory/seqbench>] and the documentation, with vignettes and
+the two new case studies, is on the package site.^[<https://castlaboratory.github.io/seqbench/>]

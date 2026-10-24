@@ -1,4 +1,5 @@
 seqbench
+ggplot2
 knitr
 kableExtra
 rmarkdown

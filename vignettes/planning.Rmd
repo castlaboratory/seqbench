@@ -1,0 +1,127 @@
+---
+title: "Planning a comparison and choosing a boundary"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Planning a comparison and choosing a boundary}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4)
+```
+
+```{r}
+library(seqbench)
+```
+
+Three choices shape what a sequential comparison costs: the bounds of the loss, the margin and
+the boundary. All three are fixed in `comparison_design()` before any loss is observed, so they
+have to be reasoned about in advance. This vignette shows how.
+
+## 1. Bounds: as tight as the loss allows
+
+The confidence sequences in `seqbench` are valid for every distribution of losses inside the
+declared `bounds`. The price of that generality is a cost that grows with the width of the
+bounds: in the regime where most benchmarks stop, the number of instances needed is roughly
+proportional to `(upper - lower) / distance`, where `distance` is how far the true mean
+difference is from the nearest threshold `-margin` or `margin`.
+
+So prefer a loss with natural bounds that are close to the values it actually takes. Good
+examples:
+
+* an error rate, an attack rate or any other proportion, in `[0, 1]`;
+* a relative gap to a lower bound, `1 - LB / z`, in `[0, 1)` for any feasible solution;
+* a modularity-based loss `1 - Q`, in `[0, 1.5]` because `Q` lies in `[-1/2, 1]`.
+
+If the loss is unbounded (running time, an absolute error), bound it yourself before the study:
+cap it at a cutoff, or replace failures by a penalty (PAR-k). Either way the estimand becomes
+the mean of the bounded loss, and the choice is part of the design. The package never clips a
+loss for you: a value outside `bounds` is an error.
+
+## 2. The margin is a domain decision
+
+`margin` is the smallest difference that would change what you do: one percentage point of
+accuracy, of optimality gap or of a population infected. It is not a tuning knob, and it must
+not be revised after looking at the data. A smaller margin costs more, because the distance to
+the thresholds shrinks.
+
+## 3. How many instances? `planning_horizon()`
+
+`planning_horizon()` translates a target distance into a number of instances before anything is
+run. It has two modes.
+
+```{r}
+design <- comparison_design(margin = 0.02, bounds = c(0, 1))
+planning_horizon(design, distance = 0.05)              # guaranteed, Hoeffding
+planning_horizon(design, distance = 0.05, sd = 0.10)   # approximation with a planning sd
+```
+
+* Without `sd` it returns the horizon **guaranteed** for the Hoeffding boundary: on the
+  coverage event, a comparison run with `boundary = "hoeffding"` has declared the right answer
+  by then, whatever the distribution. It is very conservative, often by orders of magnitude.
+* With a planning value of `sd` (the standard deviation of the per-instance paired difference,
+  from a pilot or from experience) it returns an **approximation** based on the
+  empirical-Bernstein width. In the package's simulation study the empirical-Bernstein boundary
+  stopped after about half of this value and the betting boundary after about a quarter.
+
+Use it to set `budget` and `n_max`, and to find out early that a question is out of reach:
+
+```{r}
+planning_horizon(design, distance = 0.005, sd = 0.10)  # 0.005 away from a threshold
+```
+
+## 4. Choosing a boundary
+
+```{r}
+seqbench_boundaries()
+```
+
+| boundary | valid when | typical use |
+|---|---|---|
+| `"betting"` | losses within `bounds` | the default; tightest in every experiment we ran |
+| `"empirical_bernstein"` | losses within `bounds` | a conservative, closed-form reference |
+| `"hoeffding"` | losses within `bounds` | the guaranteed planning horizon; very conservative |
+| `"bernstein_declared"` | losses within `bounds` **and** the declared `sd_max` is a true bound | when a variance bound is known for certain; the gain over betting is modest |
+| `"naive_fixed"` | never | negative control for simulation studies only |
+
+The betting boundary has one tuning constant, `betting_c` (default 1/2). Larger values bet
+more aggressively and stop earlier when the variance is small; coverage is guaranteed for any
+value in `(0, 1)`.
+
+```{r}
+set.seed(7)
+n <- 1500
+la <- runif(n, 0.45, 0.70)
+losses <- data.frame(instance = seq_len(n), loss_a = la,
+                     loss_b = la - 0.05 + runif(n, -0.05, 0.05))   # low noise, mu = 0.05
+run <- function(boundary, ...) {
+  d <- comparison_design(margin = 0.02, bounds = c(0, 1), boundary = boundary, n_max = n, ...)
+  g <- glance(suppressWarnings(update_comparison(initialize_comparison(d), losses)))
+  opt <- list(...)
+  data.frame(boundary = boundary,
+             setting = if (length(opt)) paste(names(opt), "=", signif(unlist(opt), 3)) else "",
+             instances = g$n_instances, decision = g$decision)
+}
+rbind(run("hoeffding"), run("empirical_bernstein"), run("betting"),
+      run("betting", betting_c = 0.9),
+      run("bernstein_declared", sd_max = 0.05 / sqrt(3)))
+```
+
+All of these are valid on this stream. They differ only in how many instances they need.
+
+## 5. Budget and cost
+
+`cost_per_round` (or a `cost` column in the data) records what each `(instance, seed)`
+evaluation costs, in whatever unit matters: CPU seconds, objective evaluations, money. When the
+cumulative cost reaches `budget`, the comparison ends **inconclusive**, with the final interval
+reported. An inconclusive outcome is never turned into a decision; it says that the question
+could not be answered at this margin within this budget.
+
+```{r}
+d <- comparison_design(margin = 0.02, bounds = c(0, 1), budget = 60)
+st <- suppressWarnings(update_comparison(initialize_comparison(d),
+                                         transform(losses[1:100, ], cost = 1)))
+stopping_decision(st)
+glance(st)[, c("n_instances", "cost", "lower", "upper", "decision", "stopping_reason")]
+```

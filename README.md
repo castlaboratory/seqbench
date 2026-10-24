@@ -27,8 +27,8 @@ practical relevance `δ`:
 
 ## Status
 
-Version 0.1.0, first release; the API is experimental and may change in minor
-releases. Implemented: five boundaries (betting, empirical Bernstein, Hoeffding,
+Version 0.1.0 is on CRAN; the development version on GitHub is 0.1.1. The API is
+experimental and may change in minor releases. Implemented: five boundaries (betting, empirical Bernstein, Hoeffding,
 Bernstein with a declared variance bound, and an invalid fixed-sample negative
 control), instance-level updating with seeds as clusters, the three-way decision
 rule, budget accounting, and `print`, `summary`, `tidy`, `glance` and `autoplot`
@@ -59,15 +59,18 @@ silently converted.
 
 ## Documentation
 
-Full reference, the getting-started vignette and the changelog are on the package site:
-<https://castlaboratory.github.io/seqbench/>.
+Full reference, vignettes (getting started; planning a comparison and choosing a boundary;
+seeds, clusters and refusals), case studies (vehicle routing heuristics; vaccination
+strategies on contact networks), a page on scope and limitations, and the changelog are on
+the package site: <https://castlaboratory.github.io/seqbench/>.
 
 ## Companion article and experiments
 
 The article *seqbench: Anytime-Valid Sequential Benchmarking of Algorithms in R*
 (submitted to The R Journal) lives in `paper/rjournal/` of this repository, and the
 simulation study and applications it reports in `experiments/` (frozen configurations,
-runner, analysis scripts; results are archived separately). Neither directory is part of
+instance-pool builder, runner, analysis scripts; raw results are archived separately and the
+summary tables the article reads are in `paper/rjournal/data/`). Neither directory is part of
 the R package sources.
 
 ## Installation
@@ -92,4 +95,6 @@ with an equivalence margin and explicit cost accounting.
 
 ## License
 
-GPL (>= 3). © CAST Lab, Universidade Federal de Pernambuco.
+GPL (>= 3). © André Leite, Raydonal Ospina and Cristiano Ferraz.
+CAST Lab, Departamento de Estatística, Universidade Federal de Pernambuco, and
+Departamento de Estatística, Universidade Federal da Bahia.

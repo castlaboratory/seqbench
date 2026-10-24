@@ -12,13 +12,30 @@ template:
 development:
   mode: auto
 
+home:
+  sidebar:
+    structure: [links, license, community, citation, authors, dev]
+  links:
+  - text: Companion article (source)
+    href: https://github.com/castlaboratory/seqbench/tree/main/paper/rjournal
+  - text: Experiments and reproduction scripts
+    href: https://github.com/castlaboratory/seqbench/tree/main/experiments
+  - text: CAST Lab
+    href: https://castlab.org
+
 authors:
   André Leite:
     href: https://castlab.org
+    html: "André Leite<br><small>CAST Lab, Departamento de Estatística, Universidade Federal de Pernambuco</small>"
   Raydonal Ospina:
     href: https://castlab.org
+    html: "Raydonal Ospina<br><small>Departamento de Estatística, Universidade Federal da Bahia; CAST Lab, Universidade Federal de Pernambuco</small>"
   Cristiano Ferraz:
     href: https://castlab.org
+    html: "Cristiano Ferraz<br><small>CAST Lab, Departamento de Estatística, Universidade Federal de Pernambuco</small>"
+  footer:
+    roles: [cre, aut]
+    text: "Developed by"
 
 navbar:
   structure:
@@ -34,6 +51,14 @@ reference:
   contents: [seqbench_boundaries, boundary_kernels]
 - title: Re-exports
   contents: [reexports]
+
 articles:
-- title: Vignettes
-  contents: [getting-started]
+- title: Using seqbench
+  navbar: Using seqbench
+  contents: [getting-started, planning, seeds-and-refusals]
+- title: Case studies
+  navbar: Case studies
+  contents: [articles/vehicle-routing, articles/epidemic-vaccination]
+- title: Background
+  navbar: Background
+  contents: [articles/scope]

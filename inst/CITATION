@@ -1,20 +1,35 @@
 year <- if (!is.null(meta$Date)) sub("-.*", "", meta$Date) else format(Sys.Date(), "%Y")
 ver  <- meta$Version
+authors <- c(
+  person("André",     "Leite",  email = "leite@castlab.org",    comment = c(ORCID = "0000-0002-4718-9766")),
+  person("Raydonal",  "Ospina", email = "raydonal@castlab.org", comment = c(ORCID = "0000-0002-9884-9090")),
+  person("Cristiano", "Ferraz", email = "cferraz@castlab.org",  comment = c(ORCID = "0000-0002-6838-6734"))
+)
 
 bibentry(
   bibtype = "Manual",
+  header  = "To cite the package, please use:",
   title   = "seqbench: Anytime-Valid Sequential Benchmarking of Algorithms",
-  author  = c(
-    person("André",     "Leite",  email = "leite@castlab.org", role = c("aut", "cre")),
-    person("Raydonal",  "Ospina", email = "raydonal@castlab.org", role = "aut"),
-    person("Cristiano", "Ferraz", email = "cferraz@castlab.org", role = "aut")
-  ),
+  author  = authors,
   year    = year,
   note    = sprintf("R package version %s", ver),
-  url     = "https://github.com/castlaboratory/seqbench",
+  url     = "https://CRAN.R-project.org/package=seqbench",
   textVersion = paste0(
     "Leite, A., Ospina, R., & Ferraz, C. (", year,
     "). seqbench: Anytime-Valid Sequential Benchmarking of Algorithms. ",
-    "R package version ", ver, ". https://github.com/castlaboratory/seqbench"
+    "R package version ", ver, ". https://CRAN.R-project.org/package=seqbench"
+  )
+)
+
+bibentry(
+  bibtype = "Unpublished",
+  header  = "For the protocol, its guarantee and the simulation study, please also cite:",
+  title   = "seqbench: Anytime-Valid Sequential Benchmarking of Algorithms in R",
+  author  = authors,
+  year    = "2026",
+  note    = "Submitted to The R Journal. Source: https://github.com/castlaboratory/seqbench/tree/main/paper/rjournal",
+  textVersion = paste0(
+    "Leite, A., Ospina, R., & Ferraz, C. (2026). seqbench: Anytime-Valid Sequential ",
+    "Benchmarking of Algorithms in R. Submitted to The R Journal."
   )
 )

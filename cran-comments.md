@@ -1,18 +1,21 @@
-# seqbench 0.1.0
+# seqbench 0.1.1
 
-First submission.
+Update of a package first released as 0.1.0.
+
+* The betting boundary now takes its decisions from the exact capital tracked at the two
+  decision thresholds. Decisions are unchanged; the per-instance cost no longer grows with
+  the length of the stream (long streams were superlinear in 0.1.0).
+* Argument validation, documentation corrections and two new vignettes.
 
 ## Test environments
 
-* local: macOS 26 (Apple Silicon), R 4.6, `R CMD check --as-cran`
+* local: Ubuntu, R 4.6.1, `R CMD check --as-cran`
 * CI (GitHub Actions, R-CMD-check.yaml): macOS-latest (R release),
   windows-latest (R release), ubuntu-latest (R devel, release, oldrel-1)
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note
-
-* "New submission" (CRAN incoming feasibility). This is the first release.
+0 errors | 0 warnings | 0 notes
 
 ## Notes for the reviewers
 
@@ -22,8 +25,8 @@ First submission.
   boundary, `"naive_fixed"`, is intentionally invalid under optional stopping;
   it exists as a negative control for simulation studies and every output
   produced with it carries an explicit "invalid" label.
-* Examples and tests run in well under a minute; no example is wrapped in
+* Examples, tests and vignettes run in well under a minute; no example is wrapped in
   `\dontrun{}`.
-* The companion article (The R Journal, in preparation) and its experiments
-  live in a separate repository (castlaboratory/seqbench-paper), not in the
-  package.
+* The companion article (submitted to The R Journal) and its experiments live in
+  `paper/` and `experiments/` of the GitHub repository and are excluded from the
+  package build by `.Rbuildignore`.

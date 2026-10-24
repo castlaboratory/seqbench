@@ -1,0 +1,52 @@
+---
+title: "Where seqbench applies, and where it does not"
+---
+
+`seqbench` compares **two** procedures on a stream of **independent** units with **bounded,
+paired** losses, and tells you when you can stop. This page lists situations that fit, and the
+limits that matter in practice.
+
+## Situations that fit
+
+**Monte Carlo studies.** Comparing two estimators, tests or interval procedures by simulation.
+Replications are independent by construction, so assumption A1 holds exactly, and the package
+answers the question a fixed number of replications leaves open: when is the evidence enough?
+
+**Heuristics and solvers.** Two heuristics, metaheuristic settings or solver versions on an
+instance generator. A gap to a lower bound is a natural bounded loss; the
+[vehicle routing case study](vehicle-routing.html) shows one.
+
+**Regression testing.** A new release of numerical software against the previous one, inside
+continuous integration, on a generator of test problems. "Practically equivalent" is a
+statement of no relevant regression at a known error level; "inconclusive" is a reason to look.
+
+**Simulation-based policy evaluation.** Interventions in epidemic, traffic, inventory or
+supply-chain simulators. Scenarios drawn from a prior are the instances, stochastic
+replications are the seeds, and the outcome is often a proportion. See the
+[vaccination case study](epidemic-vaccination.html).
+
+**Model evaluation.** Two predictive models scored on independent test examples with a bounded
+per-example loss, when each label or grade is expensive. Cross-validation folds are *not*
+independent instances; use a held-out stream.
+
+## Limits
+
+* **Two procedures.** Comparing many candidates needs a multiplicity correction or a
+  sequential model confidence set.
+* **A population of instances.** The estimand is the mean over a population defined by a
+  generator or by random sampling. A fixed benchmark library is not a random sample of
+  anything; its finite-population mean needs sampling without replacement, which is not
+  implemented.
+* **Independence and stationarity.** Instances that arrive in time (daily operations,
+  production traffic) can drift or be serially dependent. The package cannot detect this.
+* **Known bounds.** The cost grows with the width of the bounds; unbounded losses must be
+  bounded by the user (cap, penalty), which changes the estimand.
+* **One loss, one margin, fixed in advance.** A trade-off between quality and running time must
+  be folded into the loss before the study. The margin cannot be changed after looking.
+* **A mean hides heterogeneity.** If the answer may differ between kinds of instances, define
+  those subpopulations in advance and compare them separately.
+* **Seeds are planned, not adapted.** Adding seeds to instances that look close is refused.
+* **The price of distribution-free validity.** When losses vary little relative to their
+  range, the betting boundary needs several times more instances than a Gaussian sequence that
+  knows the variance. The Gaussian sequence is faster because it assumes more, and it can lose
+  coverage on tied, skewed or clustered outputs, which are common in algorithm benchmarks.

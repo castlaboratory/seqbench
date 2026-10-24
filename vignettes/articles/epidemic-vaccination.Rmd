@@ -1,0 +1,126 @@
+---
+title: "Case study: vaccination strategies on contact networks"
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4)
+```
+
+A public-health team has doses for a fraction of a population and two ways to allocate them:
+
+* **A, acquaintance immunisation** (Cohen, Havlin and ben-Avraham, 2003): pick a random
+  person and vaccinate one of their contacts, until the doses run out. It needs only local
+  information, such as asking people to name a contact.
+* **B, degree targeting**: vaccinate the people with the most contacts. It needs the whole
+  contact network.
+
+Is the full information of B worth it, in the sense of reducing the final attack rate of an
+epidemic by at least one percentage point? Experiments are simulations, each one cheap but
+noisy; the question is when to stop simulating. The companion article runs the full study on
+1,000 resampled streams with a known truth (`experiments/configs/app_epidemic_2026-10-23.R`).
+
+```{r}
+library(seqbench)
+library(igraph)
+```
+
+## Simulating an epidemic
+
+For an SIR epidemic with a fixed infectious period, the final set of infected people is the
+union of the clusters of the index cases in *bond percolation*: keep each contact with
+probability equal to the transmissibility `T`, remove the vaccinated, and take the connected
+components that contain the index cases (Newman, 2002). That makes each simulation a few
+milliseconds.
+
+```{r}
+final_size <- function(gp, vacc, ord, n_index = 5L) {
+  keep <- !vacc
+  memb <- components(induced_subgraph(gp, which(keep)))$membership
+  idx <- match(ord[keep[ord]][seq_len(n_index)], which(keep))   # first unvaccinated in a shared order
+  sum(memb %in% unique(memb[idx])) / length(vacc)
+}
+
+acquaintance <- function(adj, nd) {
+  N <- length(adj); v <- logical(N); deg <- lengths(adj)
+  while (sum(v) < nd) {
+    r <- sample.int(N, 1)
+    if (deg[r]) v[adj[[r]][sample.int(deg[r], 1)]] <- TRUE
+  }
+  v
+}
+```
+
+## Instances and seeds
+
+An **instance** is a network with its epidemic parameters, drawn from a population of
+networks: Erdős-Rényi, Barabási-Albert or Watts-Strogatz, 500 to 1,500 people, basic
+reproduction number between 1.5 and 3 and coverage between 5% and 20%. A **seed** is one
+stochastic epidemic on that network. Both strategies see the same percolated network and the
+same order of candidate index cases in a seed (common random numbers), so the losses are
+paired by `(instance, seed)`. The loss is the attack rate, the fraction of the population
+infected, so the bounds `[0, 1]` hold by construction.
+
+```{r}
+network_instance <- function(seeds = 3L) {
+  N <- sample(500:1500, 1)
+  g <- simplify(switch(sample(3, 1),
+    sample_gnm(N, round(N * runif(1, 2, 6))),
+    sample_pa(N, m = sample(2:4, 1), directed = FALSE),
+    sample_smallworld(1, N, nei = sample(2:4, 1), p = runif(1, 0.01, 0.2))))
+  deg <- degree(g); Tr <- min(1, runif(1, 1.5, 3) * mean(deg) / (mean(deg^2) - mean(deg)))
+  nd <- round(runif(1, 0.05, 0.20) * N)
+  el <- as_edgelist(g, names = FALSE)
+  adj <- lapply(split(c(el[, 2], el[, 1]), factor(c(el[, 1], el[, 2]), levels = seq_len(N))), as.integer)
+  t(vapply(seq_len(seeds), function(s) {
+    va <- acquaintance(adj, nd)
+    vb <- logical(N); vb[order(-deg, runif(N))[seq_len(nd)]] <- TRUE
+    gp <- delete_edges(g, which(runif(ecount(g)) > Tr)); ord <- sample.int(N)
+    c(seed = s, loss_a = final_size(gp, va, ord), loss_b = final_size(gp, vb, ord))
+  }, numeric(3)))
+}
+```
+
+Three seeds per network are fixed in advance. They are averaged by the package into one
+observation per network; the network, not the simulation, is the sequential unit.
+
+## Design and run
+
+```{r}
+design <- comparison_design(alpha = 0.05, margin = 0.01, bounds = c(0, 1),
+                            boundary = "betting", n_max = 400)
+set.seed(11)
+state <- initialize_comparison(design)
+k <- 0
+while (stopping_decision(state) == "continue") {
+  rows <- do.call(rbind, lapply(1:10, function(i) cbind(instance = k + i, network_instance())))
+  state <- suppressWarnings(update_comparison(state, as.data.frame(rows)))
+  k <- k + 10
+}
+stopping_decision(state)
+glance(state)
+```
+
+```{r}
+ggplot2::autoplot(state)
+```
+
+## Reading the result
+
+The report says how many networks and simulations were consumed and which assumptions the
+decision rests on. Two features of these data are worth noticing, because they are typical of
+simulation outputs:
+
+* many paired differences are exactly zero, when both strategies stop the epidemic or both
+  fail to, and the rest are skewed;
+* simulations of the same network are correlated.
+
+The betting boundary is valid under both: it assumes only that the losses lie in `[0, 1]`
+and that networks are independent draws. A Gaussian confidence sequence assumes more, and the
+companion article measures how its coverage degrades on exactly this kind of data. Feeding each
+simulation as its own instance (pseudoreplication) would also be invalid: see
+`vignette("seeds-and-refusals")`.
+
+The answer concerns the **mean** over the population of networks. The benefit of degree
+targeting depends strongly on how heterogeneous the contacts are, so a team that knows its
+network is homogeneous, or scale-free, should define the population accordingly, and
+pre-register any subgroup comparison as a comparison of its own.

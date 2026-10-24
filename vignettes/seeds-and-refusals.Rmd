@@ -1,0 +1,109 @@
+---
+title: "Seeds, clusters and refusals"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Seeds, clusters and refusals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+library(seqbench)
+```
+
+The guarantee of `seqbench` rests on four assumptions, recorded in every report:
+
+* **A1**: instances are independent draws from the population of interest, run in an order
+  that does not depend on their losses;
+* **A2**: the number and values of the seeds of an instance are fixed without looking at any
+  of its losses;
+* **A3**: both losses lie within the declared bounds;
+* **A4**: an instance whose losses were seen is never reused.
+
+This vignette explains why the *instance*, not the evaluation, is the sequential unit, and
+what the package refuses to do.
+
+## Seeds are a cluster
+
+Runs of a randomised algorithm on the same instance with different seeds are not independent
+replications of the comparison. They share the instance, and the instance usually matters
+more than the seed. `seqbench` therefore averages the seeds of an instance into a single
+observation:
+
+```{r}
+set.seed(1)
+make <- function(n, m, mu = 0.03, w = 0.08) {
+  inst <- rep(seq_len(n), each = m)
+  v <- runif(n, -w, w)[inst]                   # instance-specific difference shared by its seeds
+  la <- runif(n * m, 0.4, 0.6)
+  data.frame(instance = inst, seed = rep(seq_len(m), n), loss_a = la,
+             loss_b = la - mu - v + runif(n * m, -0.05, 0.05))
+}
+losses <- make(400, m = 5)
+d <- comparison_design(margin = 0.01, bounds = c(0, 1), n_max = 400)
+st <- suppressWarnings(update_comparison(initialize_comparison(d), losses))
+head(tidy(st)[, c("t", "instance", "n_seeds", "estimate", "lower_running", "upper_running")], 3)
+```
+
+Feeding every `(instance, seed)` row as if it were its own instance is *pseudoreplication*: it
+treats five correlated runs as five independent pieces of evidence, which makes the interval
+too narrow. Do not do this:
+
+```{r}
+pseudo <- transform(losses, instance = seq_len(nrow(losses)), seed = 1L)   # WRONG
+```
+
+How many seeds per instance? Averaging more seeds reduces only the within-instance noise. If
+running a new instance is cheap relative to running a seed, use one seed per instance and more
+instances; if generating or loading an instance is expensive, a few seeds per instance can
+save instances, at a cost in evaluations that the `cost` column makes visible.
+
+## Plan all seeds before looking
+
+The number of seeds may differ between instances, and it may depend on what was seen *in other
+instances*, but never on the losses of the instance itself. Adding seeds to an instance that
+"looks close" makes the observation depend on its own outcome, so it is refused:
+
+```{r, error = TRUE}
+st <- update_comparison(initialize_comparison(d), make(3, m = 2))
+update_comparison(st, data.frame(instance = 2, seed = 3, loss_a = 0.5, loss_b = 0.4))
+```
+
+Give the new runs a new instance instead.
+
+## Other refusals
+
+The package never turns invalid input into a valid-looking result.
+
+```{r, error = TRUE}
+fresh <- initialize_comparison(d)
+update_comparison(fresh, data.frame(instance = 1, loss_a = 1.2, loss_b = 0.5))   # outside bounds
+update_comparison(fresh, data.frame(instance = 1, loss_a = NA, loss_b = 0.5))    # missing loss
+update_comparison(fresh, data.frame(instance = c(1, 1), seed = 1,
+                                    loss_a = 0.5, loss_b = 0.4))                  # duplicated pair
+comparison_design(margin = 0.01, bounds = c(0, 1), paired = FALSE)                # unpaired
+```
+
+A run that failed or timed out needs a loss decided *before* it reaches the package, for
+example a penalised value within the bounds. Dropping it would bias the comparison towards
+the algorithm that fails more often on hard instances.
+
+Once a comparison has reached a terminal decision it refuses further data, because the
+pre-registered protocol ends there:
+
+```{r, error = TRUE}
+st <- suppressWarnings(update_comparison(initialize_comparison(d), make(400, m = 1, mu = 0.1)))
+stopping_decision(st)
+update_comparison(st, make(1, m = 1))
+```
+
+## What the package cannot check
+
+Independence of instances (A1) and the absence of drift cannot be verified from the losses.
+If instances arrive in time (daily operations, production traffic) or come from a fixed
+benchmark library rather than a generator, think about whether "a random draw from a
+population" describes them before trusting the guarantee.

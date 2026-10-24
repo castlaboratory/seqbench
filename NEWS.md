@@ -11,6 +11,8 @@
   working through the previous code path.
 * Endpoint refinement of the betting boundary evaluates the exact capital on vectorised
   sub-grids instead of scalar bisection.
+* A loss column made only of `NA` (logical) is reported as missing values, not as
+  non-numeric.
 * `comparison_design()` validates `betting_grid` (previously checked only when the
   comparison was initialised).
 * `comparison_report()` states assumption A2 as in the article: the number and the values
@@ -20,7 +22,11 @@
   "about half" rule of thumb applies to the `sd` mode (about one half for empirical
   Bernstein, one quarter for betting).
 * New vignettes: "Planning a comparison and choosing a boundary" and "Seeds, clusters and
-  refusals"; case studies on vehicle routing and epidemic control on the package site.
+  refusals". The getting-started vignette lists all five boundaries.
+* Package site: case studies on vehicle routing heuristics and on vaccination strategies on
+  contact networks, a page on scope and limitations, author affiliations, and a fixed web
+  manifest (the favicon icons used absolute paths that broke under `/seqbench/`).
+* `CITATION` gives the CRAN URL, ORCID identifiers and the companion article.
 
 # seqbench 0.1.0
 

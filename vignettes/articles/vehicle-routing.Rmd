@@ -1,0 +1,157 @@
+---
+title: "Case study: choosing a vehicle routing heuristic"
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7, fig.height = 4)
+```
+
+A distribution company plans delivery routes every day with a constructive heuristic for the
+capacitated vehicle routing problem (CVRP): one depot, customers with demands, vehicles with a
+capacity. Two classic candidates are
+
+* **A, sweep** (Gillett and Miller, 1974): sort customers by polar angle around the depot and
+  fill vehicles in that order;
+* **B, savings** (Clarke and Wright, 1964): start with one route per customer and merge routes
+  in decreasing order of the distance saved.
+
+Both are followed by 2-opt inside each route. Which one should the company deploy on problems
+like its own? This article runs the comparison with `seqbench`. The companion article runs the
+same comparison with larger instances on 1,000 resampled streams with a known truth
+(`experiments/configs/app_cvrp_2026-10-23.R` in the package repository).
+
+```{r}
+library(seqbench)
+```
+
+## The heuristics
+
+```{r}
+route_len <- function(r, D) { p <- c(1L, r, 1L); sum(D[cbind(p[-length(p)], p[-1])]) }
+
+two_opt <- function(r, D) {
+  if (length(r) < 3L) return(r)
+  repeat {
+    p <- c(1L, r, 1L); k <- length(p); improved <- FALSE
+    for (i in 1:(k - 3L)) {
+      j <- (i + 2L):(k - 1L)
+      delta <- D[p[i], p[j]] + D[p[i + 1L], p[j + 1L]] - D[p[i], p[i + 1L]] - D[cbind(p[j], p[j + 1L])]
+      b <- which(delta < -1e-12)
+      if (length(b)) { jj <- j[b[1]]; p[(i + 1L):jj] <- rev(p[(i + 1L):jj]); improved <- TRUE; break }
+    }
+    r <- p[2:(k - 1L)]
+    if (!improved) return(r)
+  }
+}
+
+sweep <- function(xy, q, Q, D) {
+  ang <- (atan2(xy[-1, 2] - xy[1, 2], xy[-1, 1] - xy[1, 1]) - runif(1, 0, 2 * pi)) %% (2 * pi)
+  routes <- list(); cur <- integer(0); load <- 0
+  for (v in order(ang) + 1L) {
+    if (load + q[v] > Q) { routes[[length(routes) + 1L]] <- cur; cur <- integer(0); load <- 0 }
+    cur <- c(cur, v); load <- load + q[v]
+  }
+  lapply(c(routes, list(cur)), two_opt, D = D)
+}
+
+savings <- function(q, Q, D) {
+  n <- nrow(D); cust <- 2:n
+  pr <- which(upper.tri(D[cust, cust]), arr.ind = TRUE)
+  i <- cust[pr[, 1]]; j <- cust[pr[, 2]]
+  s <- D[1, i] + D[1, j] - D[cbind(i, j)]
+  o <- order(-s)[s[order(-s)] > 0]; i <- i[o]; j <- j[o]
+  rid <- seq_len(n); routes <- as.list(seq_len(n)); load <- q
+  for (k in seq_along(i)) {
+    a <- i[k]; b <- j[k]; ra <- rid[a]; rb <- rid[b]
+    if (ra == rb || load[ra] + load[rb] > Q) next
+    A <- routes[[ra]]; B <- routes[[rb]]
+    new <- if (A[length(A)] == a && B[1] == b) c(A, B) else if (A[1] == a && B[length(B)] == b) c(B, A)
+      else if (A[length(A)] == a && B[length(B)] == b) c(A, rev(B)) else if (A[1] == a && B[1] == b) c(rev(A), B)
+      else NULL
+    if (is.null(new)) next
+    routes[[ra]] <- new; routes[rb] <- list(NULL); load[ra] <- load[ra] + load[rb]; rid[new] <- ra
+  }
+  lapply(Filter(Negate(is.null), routes[cust]), two_opt, D = D)
+}
+```
+
+## A bounded loss without truncation
+
+The cost of the optimal solution is unknown, but it is at least the length of a minimum
+spanning tree of the depot and customers, and at least the radial bound
+`2 * sum(q * d0) / Q`. Call the larger of the two `LB`. The **relative gap**
+`1 - LB / z` of a solution of cost `z` lies in `[0, 1)` for every feasible solution, so the
+bounds `[0, 1]` hold by construction: no truncation and no clipping.
+
+```{r}
+mst_len <- function(D) {
+  n <- nrow(D); inT <- c(TRUE, rep(FALSE, n - 1L)); best <- D[1, ]; tot <- 0
+  for (k in 2:n) { best[inT] <- Inf; v <- which.min(best); tot <- tot + best[v]; inT[v] <- TRUE; best <- pmin(best, D[v, ]) }
+  tot
+}
+
+instance <- function() {
+  n <- sample(30:80, 1)
+  depot <- switch(sample(3, 1), c(0.5, 0.5), c(0, 0), runif(2))
+  xy <- rbind(depot, matrix(runif(2 * n), n))
+  q <- c(0, sample(1:10, n, replace = TRUE))
+  Q <- max(max(q), ceiling(runif(1, 4, 15) * mean(q[-1])))
+  D <- as.matrix(dist(xy))
+  lb <- max(mst_len(D), 2 * sum(q * D[1, ]) / Q)
+  t0 <- proc.time()[["user.self"]]
+  za <- sum(vapply(sweep(xy, q, Q, D), route_len, 0, D = D))
+  zb <- sum(vapply(savings(q, Q, D), route_len, 0, D = D))
+  c(loss_a = 1 - lb / za, loss_b = 1 - lb / zb, cost = proc.time()[["user.self"]] - t0)
+}
+```
+
+## Design first
+
+The margin is fixed before any instance is run: one percentage point of gap. The budget is
+600 instances.
+
+```{r}
+design <- comparison_design(alpha = 0.05, margin = 0.01, bounds = c(0, 1),
+                            boundary = "betting", n_max = 600)
+design
+```
+
+## Run instances as they come
+
+The instances are solved in batches of 25, and the comparison is updated after each batch;
+the protocol may be inspected at every step without invalidating it.
+
+```{r}
+set.seed(2026)
+state <- initialize_comparison(design)
+batch <- 0
+while (stopping_decision(state) == "continue") {
+  ids <- batch * 25 + 1:25
+  rows <- t(replicate(25, instance()))
+  state <- suppressWarnings(update_comparison(state,
+    data.frame(instance = ids, loss_a = rows[, "loss_a"], loss_b = rows[, "loss_b"], cost = rows[, "cost"])))
+  batch <- batch + 1
+}
+stopping_decision(state)
+comparison_report(state)
+```
+
+```{r}
+ggplot2::autoplot(state)
+```
+
+The running confidence sequence for `mean(loss_a - loss_b)` leaves the band `[-0.01, 0.01]`
+from above: on random problems like these the savings heuristic closes relevantly more of the
+gap to the lower bound than the sweep heuristic. The report records the number of instances,
+the CPU time spent, the assumptions and the versions, which is what a reader needs to audit the
+decision.
+
+## What the answer means
+
+The estimand is the mean relative gap difference over the **population defined by the
+generator**: 30 to 80 customers in the unit square, uniform positions, small integer demands.
+A company whose problems look different (clustered customers, time windows, heterogeneous
+fleets) should write a generator, or sample past problems, that describes *its* population;
+the article's study uses a richer generator with clustered and mixed positions and three demand
+profiles. The comparison also says nothing about running time unless it is folded into the
+loss; here it is only recorded as cost.

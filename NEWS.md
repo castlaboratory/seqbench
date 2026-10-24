@@ -4,7 +4,7 @@
   decision thresholds, updated in O(1) per instance (`boundary_init(track = )`), instead of
   bisecting the capital over the whole history whenever an endpoint was near a threshold.
   The per-instance cost no longer grows with the length of the stream: a stream of 8,000
-  instances at the margin went from 78 s to about 6 s on the same machine. Decisions and
+  instances at the margin went from about 34 s to about 3.5 s on the same machine. Decisions and
   stopping times are unchanged (identical in 600 checked streams); reported running
   intervals can be up to one grid cell wider per side between calls, and both endpoints
   are still refined once per `update_comparison()` call. States saved with 0.1.0 keep

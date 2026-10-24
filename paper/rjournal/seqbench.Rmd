@@ -326,8 +326,8 @@ therefore tracks the exact capital at the two thresholds, which costs $O(1)$ per
 records on which side of a threshold the set lies when the capital excludes it; every later
 set is contained in that one, so the side never changes. The per-instance cost is linear in
 the grid size and does not grow with the length of the stream. A stream of 8,000 instances
-exactly at the margin, which never decides, takes about 6 s on a 2015-era desktop processor
-(Intel Core i5-6500, R 4.6.1).
+exactly at the margin, which never decides, takes about 3.5 s on a 2015-era desktop processor
+(Intel Core i5-6500, R 4.6.1), against about 34 s with version 0.1.0.
 
 # Simulation study {#sec-sim}
 

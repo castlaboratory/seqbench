@@ -17,6 +17,7 @@ License: GPL (>= 3)
 URL: https://castlaboratory.github.io/seqbench/, https://github.com/castlaboratory/seqbench
 BugReports: https://github.com/castlaboratory/seqbench/issues
 Encoding: UTF-8
+Language: en-GB
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.1)
